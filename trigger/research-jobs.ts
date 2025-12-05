@@ -22,8 +22,8 @@ export const scrapeWebsiteTask = task({
   id: "scrape-website",
   retry: {
     maxAttempts: 3,
-    minDelayInMs: 1000,
-    maxDelayInMs: 10000,
+    minTimeoutInMs: 1000,
+    maxTimeoutInMs: 10000,
   },
   run: async (payload: { companyName: string; companyUrl?: string }) => {
     console.log(`[scrapeWebsiteTask] Starting for ${payload.companyName}`);
@@ -106,8 +106,8 @@ export const searchGitHubTask = task({
   id: "search-github",
   retry: {
     maxAttempts: 3,
-    minDelayInMs: 1000,
-    maxDelayInMs: 10000,
+    minTimeoutInMs: 1000,
+    maxTimeoutInMs: 10000,
   },
   run: async (payload: { companyName: string }) => {
     console.log(`[searchGitHubTask] Starting for ${payload.companyName}`);
@@ -166,8 +166,8 @@ export const analyzeWithClaudeTask = task({
   id: "analyze-with-claude",
   retry: {
     maxAttempts: 2,
-    minDelayInMs: 2000,
-    maxDelayInMs: 10000,
+    minTimeoutInMs: 2000,
+    maxTimeoutInMs: 15000,
   },
   run: async (payload: {
     companyName: string;
@@ -320,8 +320,8 @@ export const storeResearchTask = task({
   id: "store-research",
   retry: {
     maxAttempts: 3,
-    minDelayInMs: 1000,
-    maxDelayInMs: 5000,
+    minTimeoutInMs: 1000,
+    maxTimeoutInMs: 5000,
   },
   run: async (payload: {
     jobId: string;
