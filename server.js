@@ -4,9 +4,6 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
-// Load calendar functions
-const { connectGoogleCalendar } = require('./lib/google-calendar');
-
 const db = require('./lib/database');
 const { performResearch } = require('./lib/research');
 const { performDeepResearch } = require('./lib/deep-research');
