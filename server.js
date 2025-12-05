@@ -705,20 +705,28 @@ app.post('/api/calendar/sync', async (req, res) => {
         continue;
       }
       
-      // Store calendar event in database
-      await db.addCalendarEvent({
-        event_id: event.id,
-        summary: event.summary,
-        start_time: event.startTime,
-        end_time: event.endTime,
-        company_name: companyName
-      });
-      syncResults.synced++;
-      
       // Check if company already has research
-      const existingCompany = await db.getCompanyByName(companyName);
+      let existingCompany = await db.getCompany(companyName);
       
-      if (!existingCompany && triggerClient) {
+      // If company doesn't exist, create it
+      if (!existingCompany) {
+        await db.addCompanyToPipeline(companyName, 'research', event.startTime, `Auto-added from calendar: ${event.summary}`);
+        existingCompany = await db.getCompany(companyName);
+      }
+      
+      // Store calendar event in database
+      if (existingCompany) {
+        await db.addCalendarEvent(
+          event.id,
+          existingCompany.id,
+          event.summary.substring(0, 250), // Truncate to fit VARCHAR(255)
+          event.startTime
+        );
+        syncResults.synced++;
+      }
+      
+      if (!existingCompany.research_data && triggerClient) {
+      if (!existingCompany.research_data && triggerClient) {
         // Auto-trigger research for new companies
         const jobId = uuidv4();
         const payload = {
@@ -745,11 +753,16 @@ app.post('/api/calendar/sync', async (req, res) => {
             error: triggerError.message
           });
         }
-      } else if (existingCompany) {
+      } else if (existingCompany.research_data) {
         syncResults.companies.push({
           name: companyName,
-          status: 'already_exists',
+          status: 'already_has_research',
           companyId: existingCompany.id
+        });
+      } else {
+        syncResults.companies.push({
+          name: companyName,
+          status: 'no_trigger_client'
         });
       }
     }
