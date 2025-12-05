@@ -107,51 +107,114 @@ app.get('/api/test/calendar', async (req, res) => {
 
 /**
  * POST /api/research-direct
- * Synchronous company research with role-specific data + interview briefing
+ * ASYNC company research via Trigger.dev v3 - returns job ID immediately
+ * Frontend polls /api/research-status/:jobId for results
  */
 app.post('/api/research-direct', async (req, res) => {
   try {
-    const { companyName, companyUrl, role, deepMode } = req.body;
+    const { companyName, companyUrl, role, deepMode = true } = req.body;
     
     if (!companyName) {
       return res.status(400).json({ error: 'Company name is required' });
     }
     
-    console.log(`📊 ${deepMode ? 'ENHANCED' : 'Quick'} research for: ${companyName}${role ? ` (${role})` : ''}`);
+    const jobId = uuidv4();
+    console.log(`🚀 [ASYNC] Queuing research job ${jobId} for ${companyName}${role ? ` (${role})` : ''}`);
     
-    // Use enhanced research with role data if requested
-    const results = deepMode ? 
-      await performEnhancedResearch(companyName, companyUrl || `https://${companyName.toLowerCase().replace(/\s+/g, '')}.com`, role) : 
-      await performResearch(companyName);
+    // Create job record in database
+    await db.query(
+      `INSERT INTO batch_jobs (id, total_jobs, status, created_at, updated_at) 
+       VALUES ($1, 1, 'queued', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [jobId]
+    );
     
-    // Save to database
-    await db.upsertCompanyResearch(companyName, results);
+    // Queue the Trigger.dev job - returns immediately
+    // The job will run async in the background
+    const triggerResult = await triggerClient.queueResearchJob({
+      jobId,
+      companyName,
+      companyUrl: companyUrl || `https://${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
+      role: role || 'Software Engineer',
+      deepMode
+    });
     
-    // Generate interview briefing if enhanced mode
-    let briefing = null;
-    if (deepMode && role) {
-      try {
-        briefing = await generateInterviewBriefing(results, role);
-        console.log(`✅ Generated interview briefing for ${companyName} - ${role}`);
-      } catch (briefingError) {
-        console.error('Error generating briefing:', briefingError);
-        // Don't fail the whole request if briefing fails
-      }
-    }
+    console.log(`✅ Research job queued: ${jobId} (Trigger ID: ${triggerResult.id})`);
     
+    // Return immediately with job ID
     res.json({
       success: true,
+      jobId,
+      triggerId: triggerResult.id,
       company: companyName,
-      role: role,
-      mode: deepMode ? 'enhanced' : 'quick',
-      data: results,
-      briefing: briefing
+      role: role || 'Software Engineer',
+      deepMode,
+      statusUrl: `/api/research-status/${jobId}`,
+      message: 'Research job queued for processing',
+      estimatedDuration: '30-60 seconds',
+      checkStatus: 'Poll the statusUrl to check progress'
     });
     
   } catch (error) {
-    console.error('Research error:', error);
+    console.error('Research job queueing error:', error);
     res.status(500).json({
-      error: 'Research failed',
+      error: 'Failed to queue research job',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/research-status/:jobId
+ * Poll for research job status and results
+ */
+app.get('/api/research-status/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    
+    // Get job status from database
+    const result = await db.query(
+      `SELECT * FROM batch_jobs WHERE id = $1`,
+      [jobId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Job not found',
+        jobId
+      });
+    }
+    
+    const job = result.rows[0];
+    const isComplete = job.status === 'completed';
+    const isFailed = job.status === 'failed';
+    
+    // Parse stored results
+    let results = null;
+    if (isComplete && job.results) {
+      results = typeof job.results === 'string' ? JSON.parse(job.results) : job.results;
+    }
+    
+    res.json({
+      jobId,
+      status: job.status, // 'queued', 'processing', 'completed', 'failed'
+      progress: `${job.completed_jobs || 0}/${job.total_jobs || 1}`,
+      createdAt: job.created_at,
+      updatedAt: job.updated_at,
+      isComplete,
+      isFailed,
+      results: isComplete ? results : null,
+      error: isFailed ? job.results?.error : null,
+      message: isComplete 
+        ? 'Research completed successfully' 
+        : isFailed
+        ? 'Research job failed'
+        : 'Research job in progress'
+    });
+    
+  } catch (error) {
+    console.error('Research status check error:', error);
+    res.status(500).json({
+      error: 'Failed to check job status',
       message: error.message
     });
   }
