@@ -304,7 +304,7 @@
       <h2 class="section-title">Single Company Research</h2>
       
       <div class="input-group">
-        <label for="companyName">Company Name</label>
+        <label for="companyName">Company Name *</label>
         <input 
           type="text" 
           id="companyName" 
@@ -315,11 +315,33 @@
       </div>
 
       <div class="input-group">
+        <label for="companyUrl">Company Website (optional)</label>
+        <input 
+          type="text" 
+          id="companyUrl" 
+          placeholder="e.g., https://railway.app"
+          autocomplete="off"
+        />
+        <div class="hint">Will auto-generate if not provided</div>
+      </div>
+
+      <div class="input-group">
+        <label for="role">Role/Position *</label>
+        <input 
+          type="text" 
+          id="role" 
+          placeholder="e.g., Senior Software Engineer, Product Manager"
+          autocomplete="off"
+        />
+        <div class="hint">Your role to get salary data, interview questions, and job description</div>
+      </div>
+
+      <div class="input-group">
         <label>
-          <input type="checkbox" id="deepMode" style="width: auto; margin-right: 8px;">
-          <strong>🔬 Deep Research Mode</strong> (10+ pages, GitHub analysis, news, Crunchbase)
+          <input type="checkbox" id="deepMode" style="width: auto; margin-right: 8px;" checked>
+          <strong>🔬 Enhanced Research Mode</strong> (Glassdoor reviews, salary data, interview questions)
         </label>
-        <div class="hint">Takes longer but provides comprehensive analysis</div>
+        <div class="hint">Recommended: includes role-specific preparation</div>
       </div>
 
       <button class="button" onclick="startResearch()" id="researchBtn">
@@ -364,6 +386,8 @@
 
     async function startResearch() {
       const companyName = document.getElementById('companyName').value.trim();
+      const companyUrl = document.getElementById('companyUrl').value.trim();
+      const role = document.getElementById('role').value.trim();
       const deepMode = document.getElementById('deepMode').checked;
       const btn = document.getElementById('researchBtn');
       const resultDiv = document.getElementById('singleResult');
@@ -373,11 +397,16 @@
         return;
       }
 
+      if (!role) {
+        alert('Please enter the role you\'re interviewing for');
+        return;
+      }
+
       btn.disabled = true;
-      btn.textContent = deepMode ? '🔬 Deep Researching...' : '🔍 Researching...';
+      btn.textContent = deepMode ? '🔬 Enhanced Research...' : '🔍 Researching...';
       resultDiv.innerHTML = `<div class="loading">
-        ${deepMode ? '🔬 Deep researching' : 'Researching'} ${companyName}...
-        ${deepMode ? '<br><small>Scraping 10+ pages, analyzing GitHub, fetching news...</small>' : ''}
+        ${deepMode ? '🔬 Enhanced research' : 'Researching'} for ${role} at ${companyName}...
+        ${deepMode ? '<br><small>Gathering salary data, Glassdoor reviews, interview questions, and company intel...</small>' : ''}
       </div>`;
 
       try {
@@ -386,7 +415,12 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ companyName, deepMode })
+          body: JSON.stringify({ 
+            companyName, 
+            companyUrl,
+            role,
+            deepMode 
+          })
         });
 
         const data = await response.json();

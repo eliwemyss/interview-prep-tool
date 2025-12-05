@@ -364,6 +364,16 @@
         <div class="loading">Loading pipeline...</div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">📅 Upcoming Interviews from Calendar</h2>
+      </div>
+      
+      <div id="calendarContent">
+        <div class="loading">Connect your calendar to see upcoming interviews</div>
+      </div>
+    </div>
   </div>
 
   <!-- Add/Edit Company Modal -->
@@ -708,11 +718,60 @@
       }
     }
 
-    // Load pipeline on page load
+    async function loadCalendarEvents() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/calendar/events`);
+        const data = await response.json();
+        
+        const container = document.getElementById('calendarContent');
+        
+        if (!data.success || !data.events || data.events.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <p>No upcoming calendar events found.</p>
+              <button class="button" style="margin-top: 15px;" onclick="connectCalendar()">📅 Connect Google Calendar</button>
+            </div>
+          `;
+          return;
+        }
+        
+        const eventsHtml = data.events.map(event => `
+          <div style="border-left: 4px solid #667eea; padding: 15px; margin: 15px 0; background: #f8f9fa; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div>
+                <strong style="font-size: 1.1em; color: #667eea;">${event.summary || 'Untitled Event'}</strong>
+                <p style="color: #666; margin: 5px 0;">
+                  📅 ${formatDate(event.start)}<br>
+                  ${event.location ? `📍 ${event.location}<br>` : ''}
+                  ${event.description ? `📝 ${event.description}` : ''}
+                </p>
+              </div>
+              ${event.htmlLink ? `<a href="${event.htmlLink}" target="_blank" style="color: #667eea; text-decoration: none;">Open →</a>` : ''}
+            </div>
+          </div>
+        `).join('');
+        
+        container.innerHTML = eventsHtml;
+      } catch (error) {
+        console.error('Error loading calendar:', error);
+        document.getElementById('calendarContent').innerHTML = `
+          <div class="empty-state">
+            <p>Calendar not connected</p>
+            <button class="button" style="margin-top: 15px;" onclick="connectCalendar()">📅 Connect Google Calendar</button>
+          </div>
+        `;
+      }
+    }
+
+    // Load pipeline and calendar on page load
     loadPipeline();
+    loadCalendarEvents();
 
     // Auto-refresh every 30 seconds
-    setInterval(loadPipeline, 30000);
+    setInterval(() => {
+      loadPipeline();
+      loadCalendarEvents();
+    }, 30000);
   </script>
 </body>
 </html>

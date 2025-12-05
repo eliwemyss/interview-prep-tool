@@ -7,7 +7,8 @@ require('dotenv').config();
 const db = require('./lib/database');
 const { performResearch } = require('./lib/research');
 const { performDeepResearch } = require('./lib/deep-research');
-const { connectGoogleCalendar, getUpcomingEvents, extractCompanyName } = require('./lib/google-calendar');
+const { performEnhancedResearch } = require('./lib/enhanced-research');
+const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName } = require('./lib/google-calendar');
 const { testTriggerConnection, triggerResearchJob } = require('./lib/trigger-client');
 
 const app = express();
@@ -103,21 +104,21 @@ app.get('/api/test/calendar', async (req, res) => {
 
 /**
  * POST /api/research-direct
- * Synchronous company research (30 second response)
+ * Synchronous company research with role-specific data
  */
 app.post('/api/research-direct', async (req, res) => {
   try {
-    const { companyName, deepMode } = req.body;
+    const { companyName, companyUrl, role, deepMode } = req.body;
     
     if (!companyName) {
       return res.status(400).json({ error: 'Company name is required' });
     }
     
-    console.log(`📊 ${deepMode ? 'DEEP' : 'Quick'} research request for: ${companyName}`);
+    console.log(`📊 ${deepMode ? 'ENHANCED' : 'Quick'} research for: ${companyName}${role ? ` (${role})` : ''}`);
     
-    // Use deep research if requested
+    // Use enhanced research with role data if requested
     const results = deepMode ? 
-      await performDeepResearch(companyName) : 
+      await performEnhancedResearch(companyName, companyUrl || `https://${companyName.toLowerCase().replace(/\s+/g, '')}.com`, role) : 
       await performResearch(companyName);
     
     // Save to database
@@ -126,7 +127,8 @@ app.post('/api/research-direct', async (req, res) => {
     res.json({
       success: true,
       company: companyName,
-      mode: deepMode ? 'deep' : 'quick',
+      role: role,
+      mode: deepMode ? 'enhanced' : 'quick',
       data: results
     });
     
