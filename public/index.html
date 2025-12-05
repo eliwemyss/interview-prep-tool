@@ -314,6 +314,14 @@
         <div class="hint">Enter the company you're interviewing with</div>
       </div>
 
+      <div class="input-group">
+        <label>
+          <input type="checkbox" id="deepMode" style="width: auto; margin-right: 8px;">
+          <strong>🔬 Deep Research Mode</strong> (10+ pages, GitHub analysis, news, Crunchbase)
+        </label>
+        <div class="hint">Takes longer but provides comprehensive analysis</div>
+      </div>
+
       <button class="button" onclick="startResearch()" id="researchBtn">
         🔍 Start Research
       </button>
@@ -356,6 +364,7 @@
 
     async function startResearch() {
       const companyName = document.getElementById('companyName').value.trim();
+      const deepMode = document.getElementById('deepMode').checked;
       const btn = document.getElementById('researchBtn');
       const resultDiv = document.getElementById('singleResult');
       
@@ -365,8 +374,11 @@
       }
 
       btn.disabled = true;
-      btn.textContent = '🔍 Researching...';
-      resultDiv.innerHTML = '<div class="loading">Researching ' + companyName + '</div>';
+      btn.textContent = deepMode ? '🔬 Deep Researching...' : '🔍 Researching...';
+      resultDiv.innerHTML = `<div class="loading">
+        ${deepMode ? '🔬 Deep researching' : 'Researching'} ${companyName}...
+        ${deepMode ? '<br><small>Scraping 10+ pages, analyzing GitHub, fetching news...</small>' : ''}
+      </div>`;
 
       try {
         const response = await fetch(`${API_BASE_URL}/api/research-direct`, {
@@ -374,7 +386,7 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ companyName })
+          body: JSON.stringify({ companyName, deepMode })
         });
 
         const data = await response.json();

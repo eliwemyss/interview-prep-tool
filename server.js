@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const db = require('./lib/database');
 const { performResearch } = require('./lib/research');
+const { performDeepResearch } = require('./lib/deep-research');
 const { connectGoogleCalendar, getUpcomingEvents, extractCompanyName } = require('./lib/google-calendar');
 
 const app = express();
@@ -68,16 +69,18 @@ app.post('/api/setup-db', async (req, res) => {
  */
 app.post('/api/research-direct', async (req, res) => {
   try {
-    const { companyName } = req.body;
+    const { companyName, deepMode } = req.body;
     
     if (!companyName) {
       return res.status(400).json({ error: 'Company name is required' });
     }
     
-    console.log(`📊 Direct research request for: ${companyName}`);
+    console.log(`📊 ${deepMode ? 'DEEP' : 'Quick'} research request for: ${companyName}`);
     
-    // Perform research
-    const results = await performResearch(companyName);
+    // Use deep research if requested
+    const results = deepMode ? 
+      await performDeepResearch(companyName) : 
+      await performResearch(companyName);
     
     // Save to database
     await db.upsertCompanyResearch(companyName, results);
@@ -85,6 +88,7 @@ app.post('/api/research-direct', async (req, res) => {
     res.json({
       success: true,
       company: companyName,
+      mode: deepMode ? 'deep' : 'quick',
       data: results
     });
     
@@ -209,7 +213,7 @@ app.get('/api/pipeline', async (req, res) => {
         id: c.id,
         name: c.name,
         stage: c.stage,
-        nextInterview: c.next_interview,
+        nextInterview: c.interview_date,
         lastResearched: c.last_researched,
         researchData: c.research_data,
         notes: c.notes,
@@ -252,7 +256,7 @@ app.post('/api/pipeline', async (req, res) => {
         id: company.id,
         name: company.name,
         stage: company.stage,
-        nextInterview: company.next_interview,
+        nextInterview: company.interview_date,
         notes: company.notes
       }
     });
@@ -287,7 +291,7 @@ app.put('/api/pipeline/:id', async (req, res) => {
         id: company.id,
         name: company.name,
         stage: company.stage,
-        nextInterview: company.next_interview,
+        nextInterview: company.interview_date,
         notes: company.notes
       }
     });
