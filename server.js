@@ -725,7 +725,7 @@ app.post('/api/calendar/sync', async (req, res) => {
         syncResults.synced++;
       }
       
-      if (!existingCompany.research_data && triggerClient) {
+      // Auto-trigger research if company has no research data
       if (!existingCompany.research_data && triggerClient) {
         // Auto-trigger research for new companies
         const jobId = uuidv4();
