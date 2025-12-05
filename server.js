@@ -10,6 +10,7 @@ const { performDeepResearch } = require('./lib/deep-research');
 const { performEnhancedResearch } = require('./lib/enhanced-research');
 const { generateInterviewBriefing } = require('./lib/interview-briefing');
 const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName } = require('./lib/google-calendar');
+const { sendPrepEmail } = require('./lib/email');
 const { triggerClient } = require('./lib/trigger-client');
 
 const app = express();
@@ -527,6 +528,68 @@ app.post('/api/calendar/sync', async (req, res) => {
     console.error('Calendar sync error:', error);
     res.status(500).json({
       error: 'Failed to sync calendar',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// INTERVIEW REMINDER EMAILS (24H BEFORE)
+// ============================================
+
+app.post('/api/notifications/interview-reminders', async (req, res) => {
+  try {
+    const hoursAhead = Number(req.body?.hoursAhead || 24);
+    const windowMinutes = Number(req.body?.windowMinutes || 90);
+    const recipient = req.body?.email || process.env.EMAIL_TO || process.env.SMTP_USER;
+
+    if (!recipient) {
+      return res.status(400).json({
+        error: 'Recipient email not configured. Set EMAIL_TO or SMTP_USER, or pass email in body.'
+      });
+    }
+
+    const events = await db.getEventsNeedingReminder(hoursAhead, windowMinutes);
+
+    if (events.length === 0) {
+      return res.json({
+        success: true,
+        sent: 0,
+        message: `No interviews starting in ~${hoursAhead}h window`
+      });
+    }
+
+    const results = [];
+
+    for (const event of events) {
+      const companyName = event.company_name || extractCompanyName(event.summary) || event.summary || 'Interview';
+      const emailEvent = {
+        start: { dateTime: event.start_time },
+        end: { dateTime: event.end_time },
+        location: event.location || '',
+        summary: event.summary
+      };
+
+      try {
+        await sendPrepEmail(companyName, emailEvent, event.research_data, recipient);
+        await db.markEventReminderSent(event.event_id);
+        results.push({ eventId: event.event_id, company: companyName, status: 'sent' });
+      } catch (err) {
+        console.error('Reminder send error:', err.message);
+        results.push({ eventId: event.event_id, company: companyName, status: 'failed', error: err.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      sent: results.filter(r => r.status === 'sent').length,
+      total: results.length,
+      results
+    });
+  } catch (error) {
+    console.error('Reminder endpoint error:', error);
+    res.status(500).json({
+      error: 'Failed to send reminders',
       message: error.message
     });
   }
