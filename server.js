@@ -8,8 +8,9 @@ const db = require('./lib/database');
 const { performResearch } = require('./lib/research');
 const { performDeepResearch } = require('./lib/deep-research');
 const { performEnhancedResearch } = require('./lib/enhanced-research');
+const { generateInterviewBriefing } = require('./lib/interview-briefing');
 const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName } = require('./lib/google-calendar');
-const { testTriggerConnection, triggerResearchJob } = require('./lib/trigger-client');
+const { triggerClient } = require('./lib/trigger-client');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -67,10 +68,11 @@ app.post('/api/setup-db', async (req, res) => {
 
 app.get('/api/test/trigger', async (req, res) => {
   try {
-    const result = await testTriggerConnection();
+    const result = await triggerClient.testConnection();
     res.json(result);
   } catch (error) {
     res.status(500).json({
+      success: false,
       connected: false,
       error: error.message
     });
@@ -104,7 +106,7 @@ app.get('/api/test/calendar', async (req, res) => {
 
 /**
  * POST /api/research-direct
- * Synchronous company research with role-specific data
+ * Synchronous company research with role-specific data + interview briefing
  */
 app.post('/api/research-direct', async (req, res) => {
   try {
@@ -124,12 +126,25 @@ app.post('/api/research-direct', async (req, res) => {
     // Save to database
     await db.upsertCompanyResearch(companyName, results);
     
+    // Generate interview briefing if enhanced mode
+    let briefing = null;
+    if (deepMode && role) {
+      try {
+        briefing = await generateInterviewBriefing(results, role);
+        console.log(`✅ Generated interview briefing for ${companyName} - ${role}`);
+      } catch (briefingError) {
+        console.error('Error generating briefing:', briefingError);
+        // Don't fail the whole request if briefing fails
+      }
+    }
+    
     res.json({
       success: true,
       company: companyName,
       role: role,
       mode: deepMode ? 'enhanced' : 'quick',
-      data: results
+      data: results,
+      briefing: briefing
     });
     
   } catch (error) {
@@ -144,6 +159,7 @@ app.post('/api/research-direct', async (req, res) => {
 /**
  * POST /api/research-batch
  * Asynchronous batch research via Trigger.dev
+ * Queues jobs for processing with proper tracking
  */
 app.post('/api/research-batch', async (req, res) => {
   try {
@@ -156,19 +172,33 @@ app.post('/api/research-batch', async (req, res) => {
     const batchId = uuidv4();
     console.log(`📦 Batch research request for ${companies.length} companies, batch ID: ${batchId}`);
     
-    // Create batch in database
+    // Create batch in database for tracking
     await db.createBatch(batchId, companies);
     
-    // TODO: Trigger Trigger.dev job here when integrated
-    // For now, we'll process synchronously in background
+    // Queue jobs with Trigger.dev
+    const jobQueueResult = await triggerClient.queueBatchResearchJobs(
+      companies.map(c => ({
+        name: typeof c === 'string' ? c : c.name,
+        url: typeof c === 'string' ? undefined : c.url,
+        role: typeof c === 'string' ? 'Software Engineer' : (c.role || 'Software Engineer')
+      }))
+    );
+    
+    console.log(`✅ Queued ${jobQueueResult.totalQueued} jobs via Trigger.dev - Batch: ${batchId}`);
+    
+    // Start async processing regardless of Trigger.dev status
+    // This ensures research completes even if Trigger.dev is down
     processBatchInBackground(batchId, companies);
     
     res.json({
       success: true,
       batchId,
       total: companies.length,
+      jobsQueued: jobQueueResult.totalQueued,
+      triggerBatchId: jobQueueResult.batchId,
       statusUrl: `/api/batch-status/${batchId}`,
-      message: 'Batch processing started'
+      message: 'Batch processing started via Trigger.dev',
+      triggerStatus: jobQueueResult.message
     });
     
   } catch (error) {

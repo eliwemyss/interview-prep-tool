@@ -522,9 +522,12 @@
     }
 
     function displayResult(data, container) {
+      const companyName = data.company || data.companyName;
+      const role = data.role;
+      
       const html = `
         <div class="result">
-          <h3>${data.companyName}</h3>
+          <h3>${companyName}</h3>
           
           <h4>📊 Overview</h4>
           <p>${data.overview}</p>
@@ -557,6 +560,14 @@
               ${data.keyTopics.map(t => `<span class="tag">${t}</span>`).join('')}
             </div>
           ` : ''}
+          
+          <div style="margin-top: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <a href="/briefing?company=${encodeURIComponent(companyName)}&role=${encodeURIComponent(role || 'Software Engineer')}" 
+               target="_blank"
+               style="flex: 1; min-width: 200px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 12px 20px; border-radius: 8px; text-decoration: none; text-align: center; font-weight: 600; cursor: pointer;">
+              📋 View Full Interview Briefing →
+            </a>
+          </div>
           
           <p style="margin-top: 20px; font-size: 0.9em; color: #888;">
             Researched at: ${new Date(data.researchedAt).toLocaleString()}
