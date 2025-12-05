@@ -1,0 +1,527 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+require('dotenv').config();
+
+const db = require('./lib/database');
+const { performResearch } = require('./lib/research');
+const { connectGoogleCalendar, getUpcomingEvents, extractCompanyName } = require('./lib/google-calendar');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+
+app.get('/health', async (req, res) => {
+  try {
+    const dbHealth = await db.testConnection();
+    
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      database: dbHealth,
+      version: '2.0.0'
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// DATABASE SETUP
+// ============================================
+
+app.post('/api/setup-db', async (req, res) => {
+  try {
+    await db.initializeTables();
+    res.json({ 
+      success: true, 
+      message: 'Database tables initialized successfully' 
+    });
+  } catch (error) {
+    console.error('Database setup error:', error);
+    res.status(500).json({ 
+      error: 'Failed to initialize database',
+      details: error.message 
+    });
+  }
+});
+
+// ============================================
+// RESEARCH ENDPOINTS
+// ============================================
+
+/**
+ * POST /api/research-direct
+ * Synchronous company research (30 second response)
+ */
+app.post('/api/research-direct', async (req, res) => {
+  try {
+    const { companyName } = req.body;
+    
+    if (!companyName) {
+      return res.status(400).json({ error: 'Company name is required' });
+    }
+    
+    console.log(`📊 Direct research request for: ${companyName}`);
+    
+    // Perform research
+    const results = await performResearch(companyName);
+    
+    // Save to database
+    await db.upsertCompanyResearch(companyName, results);
+    
+    res.json({
+      success: true,
+      company: companyName,
+      data: results
+    });
+    
+  } catch (error) {
+    console.error('Research error:', error);
+    res.status(500).json({
+      error: 'Research failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/research-batch
+ * Asynchronous batch research via Trigger.dev
+ */
+app.post('/api/research-batch', async (req, res) => {
+  try {
+    const { companies } = req.body;
+    
+    if (!companies || !Array.isArray(companies) || companies.length === 0) {
+      return res.status(400).json({ error: 'Companies array is required' });
+    }
+    
+    const batchId = uuidv4();
+    console.log(`📦 Batch research request for ${companies.length} companies, batch ID: ${batchId}`);
+    
+    // Create batch in database
+    await db.createBatch(batchId, companies);
+    
+    // TODO: Trigger Trigger.dev job here when integrated
+    // For now, we'll process synchronously in background
+    processBatchInBackground(batchId, companies);
+    
+    res.json({
+      success: true,
+      batchId,
+      total: companies.length,
+      statusUrl: `/api/batch-status/${batchId}`,
+      message: 'Batch processing started'
+    });
+    
+  } catch (error) {
+    console.error('Batch error:', error);
+    res.status(500).json({
+      error: 'Batch creation failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Background batch processing (will be replaced by Trigger.dev)
+ */
+async function processBatchInBackground(batchId, companies) {
+  console.log(`🔄 Processing batch ${batchId} in background...`);
+  
+  for (const companyName of companies) {
+    try {
+      const results = await performResearch(companyName);
+      await db.upsertCompanyResearch(companyName, results);
+      await db.updateBatchProgress(batchId, companyName, results);
+      console.log(`✅ Completed ${companyName} for batch ${batchId}`);
+    } catch (error) {
+      console.error(`❌ Failed ${companyName} for batch ${batchId}:`, error.message);
+      await db.updateBatchProgress(batchId, companyName, { error: error.message });
+    }
+  }
+  
+  console.log(`✅ Batch ${batchId} completed!`);
+}
+
+/**
+ * GET /api/batch-status/:batchId
+ * Check batch processing status
+ */
+app.get('/api/batch-status/:batchId', async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    
+    const batch = await db.getBatchStatus(batchId);
+    
+    if (!batch) {
+      return res.status(404).json({ error: 'Batch not found' });
+    }
+    
+    res.json({
+      batchId: batch.batch_id,
+      total: batch.total,
+      completed: batch.completed,
+      status: batch.status,
+      results: batch.results,
+      createdAt: batch.created_at,
+      updatedAt: batch.updated_at
+    });
+    
+  } catch (error) {
+    console.error('Batch status error:', error);
+    res.status(500).json({
+      error: 'Failed to get batch status',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// PIPELINE ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/pipeline
+ * Get all companies in the interview pipeline
+ */
+app.get('/api/pipeline', async (req, res) => {
+  try {
+    const companies = await db.getAllCompanies();
+    
+    res.json({
+      success: true,
+      count: companies.length,
+      companies: companies.map(c => ({
+        id: c.id,
+        name: c.name,
+        stage: c.stage,
+        nextInterview: c.next_interview,
+        lastResearched: c.last_researched,
+        researchData: c.research_data,
+        notes: c.notes,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Pipeline error:', error);
+    res.status(500).json({
+      error: 'Failed to get pipeline',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/pipeline
+ * Add company to pipeline
+ */
+app.post('/api/pipeline', async (req, res) => {
+  try {
+    const { companyName, stage, nextInterview, notes } = req.body;
+    
+    if (!companyName) {
+      return res.status(400).json({ error: 'Company name is required' });
+    }
+    
+    const company = await db.addCompanyToPipeline(
+      companyName,
+      stage || 'applied',
+      nextInterview || null,
+      notes || null
+    );
+    
+    res.json({
+      success: true,
+      company: {
+        id: company.id,
+        name: company.name,
+        stage: company.stage,
+        nextInterview: company.next_interview,
+        notes: company.notes
+      }
+    });
+    
+  } catch (error) {
+    console.error('Add to pipeline error:', error);
+    res.status(500).json({
+      error: 'Failed to add to pipeline',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/pipeline/:id
+ * Update company in pipeline
+ */
+app.put('/api/pipeline/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    const company = await db.updateCompany(parseInt(id), updates);
+    
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    res.json({
+      success: true,
+      company: {
+        id: company.id,
+        name: company.name,
+        stage: company.stage,
+        nextInterview: company.next_interview,
+        notes: company.notes
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update pipeline error:', error);
+    res.status(500).json({
+      error: 'Failed to update company',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/pipeline/:id
+ * Remove company from pipeline
+ */
+app.delete('/api/pipeline/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const company = await db.deleteCompany(parseInt(id));
+    
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Company removed from pipeline',
+      company: company.name
+    });
+    
+  } catch (error) {
+    console.error('Delete pipeline error:', error);
+    res.status(500).json({
+      error: 'Failed to delete company',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/pipeline/:id/refresh
+ * Manually trigger research refresh for a company
+ */
+app.post('/api/pipeline/:id/refresh', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const company = await db.getCompanyById(parseInt(id));
+    
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    console.log(`🔄 Refreshing research for: ${company.name}`);
+    
+    // Perform research
+    const results = await performResearch(company.name);
+    
+    // Update in database
+    await db.upsertCompanyResearch(company.name, results);
+    
+    res.json({
+      success: true,
+      company: company.name,
+      message: 'Research refreshed successfully',
+      data: results
+    });
+    
+  } catch (error) {
+    console.error('Refresh error:', error);
+    res.status(500).json({
+      error: 'Failed to refresh research',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// CALENDAR INTEGRATION ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/calendar/connect
+ * Start Google Calendar OAuth flow
+ */
+app.get('/api/calendar/connect', (req, res) => {
+  try {
+    const authUrl = connectGoogleCalendar();
+    res.json({
+      success: true,
+      authUrl
+    });
+  } catch (error) {
+    console.error('Calendar connect error:', error);
+    res.status(500).json({
+      error: 'Failed to connect calendar',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/calendar/callback
+ * OAuth callback handler
+ */
+app.get('/api/calendar/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    
+    if (!code) {
+      return res.status(400).send('Authorization code missing');
+    }
+    
+    // TODO: Handle OAuth token exchange
+    res.send('<h1>Calendar Connected!</h1><p>You can close this window.</p>');
+    
+  } catch (error) {
+    console.error('Calendar callback error:', error);
+    res.status(500).send('Error connecting calendar');
+  }
+});
+
+/**
+ * GET /api/calendar/events
+ * Get upcoming calendar events
+ */
+app.get('/api/calendar/events', async (req, res) => {
+  try {
+    const events = await db.getUpcomingCalendarEvents(7);
+    
+    res.json({
+      success: true,
+      count: events.length,
+      events
+    });
+    
+  } catch (error) {
+    console.error('Calendar events error:', error);
+    res.status(500).json({
+      error: 'Failed to get calendar events',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/calendar/sync
+ * Manually trigger calendar sync
+ */
+app.post('/api/calendar/sync', async (req, res) => {
+  try {
+    // TODO: Implement calendar sync logic
+    res.json({
+      success: true,
+      message: 'Calendar sync triggered',
+      note: 'This feature requires Google Calendar OAuth setup'
+    });
+    
+  } catch (error) {
+    console.error('Calendar sync error:', error);
+    res.status(500).json({
+      error: 'Failed to sync calendar',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// SERVE FRONTEND
+// ============================================
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// ============================================
+// ERROR HANDLING
+// ============================================
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message
+  });
+});
+
+// ============================================
+// START SERVER
+// ============================================
+
+app.listen(PORT, async () => {
+  console.log('\n' + '='.repeat(50));
+  console.log('🚀 Interview Prep Tool Server');
+  console.log('='.repeat(50));
+  console.log(`📡 Server running on http://localhost:${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Test database connection
+  const dbHealth = await db.testConnection();
+  if (dbHealth.healthy) {
+    console.log(`✅ Database connected`);
+  } else {
+    console.log(`❌ Database connection failed: ${dbHealth.error}`);
+  }
+  
+  console.log('\n📋 Available endpoints:');
+  console.log('  GET  /health');
+  console.log('  POST /api/research-direct');
+  console.log('  POST /api/research-batch');
+  console.log('  GET  /api/batch-status/:batchId');
+  console.log('  GET  /api/pipeline');
+  console.log('  POST /api/pipeline');
+  console.log('  PUT  /api/pipeline/:id');
+  console.log('  DELETE /api/pipeline/:id');
+  console.log('  POST /api/pipeline/:id/refresh');
+  console.log('  GET  /api/calendar/connect');
+  console.log('  GET  /api/calendar/events');
+  console.log('  POST /api/calendar/sync');
+  console.log('\n📱 Frontend:');
+  console.log(`  Main: http://localhost:${PORT}`);
+  console.log(`  Dashboard: http://localhost:${PORT}/dashboard`);
+  console.log('='.repeat(50) + '\n');
+});
+
+module.exports = app;
