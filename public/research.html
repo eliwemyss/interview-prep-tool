@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview Prep Tool - Research</title>
+  <script>
+    const API_BASE_URL = window.location.hostname === 'localhost' 
+      ? 'http://localhost:3000' 
+      : window.location.origin;
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .header p {
+      font-size: 1.1em;
+      opacity: 0.95;
+    }
+
+    .nav {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      padding: 10px 25px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .card {
+      background: white;
+      border-radius: 15px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      margin-bottom: 30px;
+    }
+
+    .section-title {
+      font-size: 1.5em;
+      margin-bottom: 25px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .input-group {
+      margin-bottom: 25px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #555;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1em;
+      transition: border-color 0.3s ease;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .hint {
+      font-size: 0.85em;
+      color: #888;
+      margin-top: 5px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .button {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 15px 40px;
+      border-radius: 8px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      width: 100%;
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    }
+
+    .button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #667eea;
+      font-size: 1.1em;
+    }
+
+    .loading::before {
+      content: "";
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 15px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .result {
+      margin-top: 30px;
+      padding: 25px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      border-left: 4px solid #667eea;
+    }
+
+    .result h3 {
+      color: #667eea;
+      margin-bottom: 15px;
+      font-size: 1.3em;
+    }
+
+    .result p, .result li {
+      line-height: 1.6;
+      color: #555;
+      margin-bottom: 10px;
+    }
+
+    .result ul {
+      margin-left: 20px;
+      margin-top: 10px;
+    }
+
+    .error {
+      background: #fee;
+      border-left-color: #e44;
+    }
+
+    .error h3 {
+      color: #c33;
+    }
+
+    .section-separator {
+      margin: 20px 0;
+      padding: 15px 0;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .tech-tag {
+      display: inline-block;
+      background: #667eea;
+      color: white;
+      padding: 5px 12px;
+      border-radius: 15px;
+      margin: 5px;
+      font-size: 0.9em;
+    }
+
+    .salary-range {
+      background: #e8f5e9;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+
+    .salary-range h4 {
+      color: #2e7d32;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .header h1 { font-size: 2em; }
+      .card { padding: 25px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 Interview Prep Tool</h1>
+      <p>AI-powered company research for your interviews</p>
+    </div>
+
+    <div class="nav">
+      <a href="/" class="nav-btn">Research</a>
+      <a href="/dashboard.html" class="nav-btn">Dashboard</a>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Company Research</h2>
+      
+      <div class="input-group">
+        <label for="companyName">Company Name *</label>
+        <input 
+          type="text" 
+          id="companyName" 
+          placeholder="e.g., Trigger.dev"
+          autocomplete="off"
+        />
+        <div class="hint">Enter the company you're interviewing with</div>
+      </div>
+
+      <div class="input-group">
+        <label for="companyUrl">Company Website (Optional)</label>
+        <input 
+          type="text" 
+          id="companyUrl" 
+          placeholder="e.g., https://trigger.dev"
+          autocomplete="off"
+        />
+        <div class="hint">We'll auto-detect if you leave this blank</div>
+      </div>
+
+      <div class="input-group">
+        <label for="role">Your Role *</label>
+        <input 
+          type="text" 
+          id="role" 
+          placeholder="e.g., Senior Software Engineer"
+          autocomplete="off"
+        />
+        <div class="hint">Used for salary estimates and interview questions</div>
+      </div>
+
+      <div class="input-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="deepMode" checked>
+          <span><strong>Deep Research Mode</strong> (includes salary data and interview questions)</span>
+        </label>
+      </div>
+
+      <button class="button" onclick="startResearch()" id="researchBtn">
+        🔍 Start Research
+      </button>
+
+      <div id="result"></div>
+    </div>
+  </div>
+
+  <script>
+    async function startResearch() {
+      const companyName = document.getElementById('companyName').value.trim();
+      const companyUrl = document.getElementById('companyUrl').value.trim();
+      const role = document.getElementById('role').value.trim();
+      const deepMode = document.getElementById('deepMode').checked;
+      const btn = document.getElementById('researchBtn');
+      const resultDiv = document.getElementById('result');
+      
+      if (!companyName) {
+        alert('Please enter a company name');
+        return;
+      }
+
+      if (!role) {
+        alert('Please enter your role');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '🔍 Researching...';
+      resultDiv.innerHTML = '<div class="loading"><div>Researching ' + companyName + '...<br><small>This takes 30-60 seconds</small></div></div>';
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/research-direct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            companyName, 
+            companyUrl: companyUrl || undefined,
+            role,
+            deepMode 
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || data.message || 'Research failed');
+        }
+
+        // Check if async (has jobId)
+        if (data.jobId) {
+          await pollJobStatus(data.jobId, companyName);
+        } else {
+          displayResult(data.data || data);
+        }
+      } catch (error) {
+        console.error('Research error:', error);
+        resultDiv.innerHTML = '<div class="result error"><h3>Error</h3><p>' + error.message + '</p></div>';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔍 Start Research';
+      }
+    }
+
+    async function pollJobStatus(jobId, companyName) {
+      const resultDiv = document.getElementById('result');
+      const maxAttempts = 60;
+      let attempts = 0;
+
+      while (attempts < maxAttempts) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/research-status/${jobId}`);
+          const data = await response.json();
+
+          if (data.isComplete && data.results) {
+            displayResult(data.results);
+            return;
+          }
+
+          if (data.isFailed) {
+            throw new Error('Research failed');
+          }
+
+          resultDiv.innerHTML = '<div class="loading"><div>Researching ' + companyName + '...<br><small>' + (attempts * 2) + 's elapsed</small></div></div>';
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          attempts++;
+        } catch (err) {
+          if (attempts >= maxAttempts - 1) throw err;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          attempts++;
+        }
+      }
+
+      throw new Error('Research timed out');
+    }
+
+    function displayResult(data) {
+      const resultDiv = document.getElementById('result');
+      
+      let html = '<div class="result">';
+      html += '<h3>📊 ' + (data.companyName || data.company || 'Company') + '</h3>';
+      
+      if (data.overview) {
+        html += '<p>' + data.overview + '</p>';
+      }
+      
+      if (data.techStack && data.techStack.length > 0) {
+        html += '<div class="section-separator">';
+        html += '<h4>🛠️ Tech Stack</h4>';
+        data.techStack.forEach(tech => {
+          html += '<span class="tech-tag">' + tech + '</span>';
+        });
+        html += '</div>';
+      }
+      
+      if (data.salaryRange || data.averageSalary) {
+        html += '<div class="salary-range">';
+        html += '<h4>💰 Salary Information</h4>';
+        if (data.salaryRange) {
+          html += '<p>Range: $' + (data.salaryRange.min || 0).toLocaleString() + ' - $' + (data.salaryRange.max || 0).toLocaleString() + '</p>';
+        }
+        if (data.averageSalary) {
+          html += '<p>Average: $' + data.averageSalary.toLocaleString() + '</p>';
+        }
+        html += '</div>';
+      }
+      
+      if (data.interviewQuestions && data.interviewQuestions.length > 0) {
+        html += '<div class="section-separator">';
+        html += '<h4>❓ Common Interview Questions</h4>';
+        html += '<ul>';
+        data.interviewQuestions.forEach(q => {
+          html += '<li>' + q + '</li>';
+        });
+        html += '</ul></div>';
+      }
+      
+      if (data.preparationTips && data.preparationTips.length > 0) {
+        html += '<div class="section-separator">';
+        html += '<h4>💡 Preparation Tips</h4>';
+        html += '<ul>';
+        data.preparationTips.forEach(tip => {
+          html += '<li>' + tip + '</li>';
+        });
+        html += '</ul></div>';
+      }
+      
+      html += '</div>';
+      resultDiv.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

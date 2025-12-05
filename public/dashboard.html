@@ -367,7 +367,7 @@
 
     <div class="card">
       <div class="card-header">
-        <h2 class="card-title">📅 Upcoming Interviews from Calendar</h2>
+        <h2 class="card-title">📅 Interview Calendar (Past 2 Weeks + Upcoming)</h2>
       </div>
       
       <div id="calendarContent">
@@ -718,6 +718,37 @@
       }
     }
 
+    function extractInterviewer(description) {
+      if (!description) return null;
+      
+      // Look for "Who:" section and extract organizer name
+      const whoMatch = description.match(/Who:[\s\S]*?([A-Z][a-z]+ [A-Z][a-z]+)\s*-\s*Organizer/i);
+      if (whoMatch) return whoMatch[1];
+      
+      // Look for organizer email pattern
+      const emailMatch = description.match(/([A-Z][a-z]+ [A-Z][a-z]+)[\s\n]+\w+@[\w.]+/i);
+      if (emailMatch) return emailMatch[1];
+      
+      return null;
+    }
+
+    function formatInterviewTime(dateString) {
+      const date = new Date(dateString);
+      
+      // Convert to CST (UTC-6)
+      const options = {
+        timeZone: 'America/Chicago',
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      };
+      
+      return date.toLocaleString('en-US', options) + ' CST';
+    }
+
     async function loadCalendarEvents() {
       try {
         const response = await fetch(`${API_BASE_URL}/api/calendar/events`);
@@ -728,30 +759,83 @@
         if (!data.success || !data.events || data.events.length === 0) {
           container.innerHTML = `
             <div class="empty-state">
-              <p>No upcoming calendar events found.</p>
+              <p>No calendar events found.</p>
               <button class="button" style="margin-top: 15px;" onclick="connectCalendar()">📅 Connect Google Calendar</button>
             </div>
           `;
           return;
         }
         
-        const eventsHtml = data.events.map(event => `
-          <div style="border-left: 4px solid #667eea; padding: 15px; margin: 15px 0; background: #f8f9fa; border-radius: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: start;">
-              <div>
-                <strong style="font-size: 1.1em; color: #667eea;">${event.summary || 'Untitled Event'}</strong>
-                <p style="color: #666; margin: 5px 0;">
-                  📅 ${formatDate(event.start)}<br>
-                  ${event.location ? `📍 ${event.location}<br>` : ''}
-                  ${event.description ? `📝 ${event.description}` : ''}
-                </p>
-              </div>
-              ${event.htmlLink ? `<a href="${event.htmlLink}" target="_blank" style="color: #667eea; text-decoration: none;">Open →</a>` : ''}
-            </div>
-          </div>
-        `).join('');
+        // Remove duplicates based on event_id
+        const uniqueEvents = [];
+        const seenIds = new Set();
         
-        container.innerHTML = eventsHtml;
+        for (const event of data.events) {
+          if (!seenIds.has(event.event_id)) {
+            seenIds.add(event.event_id);
+            uniqueEvents.push(event);
+          }
+        }
+        
+        // Sort by date
+        uniqueEvents.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        
+        const now = new Date();
+        const pastEvents = uniqueEvents.filter(e => new Date(e.start_time) < now);
+        const upcomingEvents = uniqueEvents.filter(e => new Date(e.start_time) >= now);
+        
+        let html = '';
+        
+        // Past interviews (last 2 weeks)
+        if (pastEvents.length > 0) {
+          html += '<h3 style="color: #888; font-size: 0.9em; margin: 20px 0 10px 0; text-transform: uppercase;">Recent (Past 2 Weeks)</h3>';
+          pastEvents.forEach(event => {
+            const interviewer = extractInterviewer(event.description);
+            html += `
+              <div style="border-left: 4px solid #888; padding: 15px; margin: 10px 0; background: #f8f9fa; border-radius: 8px; opacity: 0.7;">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #667eea; margin-bottom: 5px;">${event.company_name || 'Unknown Company'}</div>
+                    <div style="color: #666; font-size: 0.95em;">
+                      ⏰ ${formatInterviewTime(event.start_time)}
+                      ${interviewer ? `<br>👤 ${interviewer}` : ''}
+                    </div>
+                  </div>
+                  <span style="background: #888; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">Completed</span>
+                </div>
+              </div>
+            `;
+          });
+        }
+        
+        // Upcoming interviews
+        if (upcomingEvents.length > 0) {
+          html += '<h3 style="color: #667eea; font-size: 0.9em; margin: 20px 0 10px 0; text-transform: uppercase;">Upcoming Interviews</h3>';
+          upcomingEvents.forEach(event => {
+            const interviewer = extractInterviewer(event.description);
+            const eventDate = new Date(event.start_time);
+            const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
+            
+            html += `
+              <div style="border-left: 4px solid #667eea; padding: 15px; margin: 10px 0; background: #f0f4ff; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #667eea; margin-bottom: 5px;">${event.company_name || 'Unknown Company'}</div>
+                    <div style="color: #666; font-size: 0.95em;">
+                      ⏰ ${formatInterviewTime(event.start_time)}
+                      ${interviewer ? `<br>👤 ${interviewer}` : ''}
+                    </div>
+                  </div>
+                  <span style="background: ${daysUntil <= 1 ? '#f56565' : '#667eea'}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">
+                    ${daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`}
+                  </span>
+                </div>
+              </div>
+            `;
+          });
+        }
+        
+        container.innerHTML = html || '<div class="empty-state"><p>No interviews found</p></div>';
       } catch (error) {
         console.error('Error loading calendar:', error);
         document.getElementById('calendarContent').innerHTML = `
