@@ -567,8 +567,21 @@ app.post('/api/pipeline/:id/refresh', async (req, res) => {
 app.get('/api/calendar/connect', (req, res) => {
   try {
     const authUrl = connectGoogleCalendar();
-    // Redirect directly to Google OAuth instead of returning JSON
-    res.redirect(authUrl);
+    // Return HTML page that immediately redirects
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Connecting Google Calendar...</title>
+      </head>
+      <body>
+        <p>Redirecting to Google OAuth...</p>
+        <script>
+          window.location.href = '${authUrl}';
+        </script>
+      </body>
+      </html>
+    `);
   } catch (error) {
     console.error('Calendar connect error:', error);
     res.status(500).json({
