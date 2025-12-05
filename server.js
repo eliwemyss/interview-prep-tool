@@ -679,7 +679,7 @@ app.get('/api/calendar/events', async (req, res) => {
 
 /**
  * POST /api/calendar/sync
- * Manually trigger calendar sync
+ * Manually trigger calendar sync with deduplication
  */
 app.post('/api/calendar/sync', async (req, res) => {
   try {
@@ -693,8 +693,12 @@ app.post('/api/calendar/sync', async (req, res) => {
       synced: 0,
       skipped: 0,
       researched: 0,
+      deduplicated: 0,
       companies: []
     };
+    
+    // Deduplicate by company name + interview date (to prevent duplicates)
+    const seenCompanies = new Set();
     
     // Process each event
     for (const event of events) {
@@ -704,6 +708,16 @@ app.post('/api/calendar/sync', async (req, res) => {
         syncResults.skipped++;
         continue;
       }
+      
+      // Create dedup key: company name + date (without time)
+      const eventDate = new Date(event.startTime).toISOString().split('T')[0];
+      const dedupKey = `${companyName}|${eventDate}`;
+      
+      if (seenCompanies.has(dedupKey)) {
+        syncResults.deduplicated++;
+        continue;
+      }
+      seenCompanies.add(dedupKey);
       
       // Check if company already has research
       let existingCompany = await db.getCompany(companyName);
@@ -769,7 +783,7 @@ app.post('/api/calendar/sync', async (req, res) => {
     
     res.json({
       success: true,
-      message: `Synced ${syncResults.synced} calendar events, queued ${syncResults.researched} research jobs`,
+      message: `Synced ${syncResults.synced} calendar events, queued ${syncResults.researched} research jobs${syncResults.deduplicated > 0 ? `, removed ${syncResults.deduplicated} duplicates` : ''}`,
       ...syncResults
     });
     
