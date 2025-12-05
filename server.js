@@ -651,13 +651,13 @@ app.get('/api/calendar/events', async (req, res) => {
     // Fetch live INTERVIEW events from Google Calendar (auto-filtered)
     const events = await googleCalendar.getInterviewEvents(14);
     
-    // Extract company names and return
+    // Events are already formatted by getInterviewEvents, just normalize field names
     const formattedEvents = events.map(event => ({
       event_id: event.id,
       summary: event.summary,
-      start_time: event.start.dateTime || event.start.date,
-      end_time: event.end.dateTime || event.end.date,
-      company_name: googleCalendar.extractCompanyName(event.summary),
+      start_time: event.startTime,
+      end_time: event.endTime,
+      company_name: event.companyName,
       description: event.description || '',
       location: event.location || ''
     }));
@@ -698,7 +698,7 @@ app.post('/api/calendar/sync', async (req, res) => {
     
     // Process each event
     for (const event of events) {
-      const companyName = googleCalendar.extractCompanyName(event.summary);
+      const companyName = event.companyName; // Already extracted by getInterviewEvents
       
       if (!companyName) {
         syncResults.skipped++;
@@ -709,8 +709,8 @@ app.post('/api/calendar/sync', async (req, res) => {
       await db.addCalendarEvent({
         event_id: event.id,
         summary: event.summary,
-        start_time: event.start.dateTime || event.start.date,
-        end_time: event.end.dateTime || event.end.date,
+        start_time: event.startTime,
+        end_time: event.endTime,
         company_name: companyName
       });
       syncResults.synced++;
