@@ -102,6 +102,53 @@ app.get('/api/test/calendar', async (req, res) => {
 });
 
 // ============================================
+// DATABASE ADMIN ENDPOINTS (temporary - for debugging)
+// ============================================
+
+/**
+ * DELETE /api/admin/dummy-data
+ * Remove all test/dummy companies from database
+ */
+app.delete('/api/admin/dummy-data', async (req, res) => {
+  try {
+    const DUMMY_COMPANIES = [
+      'Railway', 'PostHog', 'Toast', 'Stripe', 
+      'Anthropic', 'Vercel', 'Trigger.dev'
+    ];
+    
+    const result = await db.query(
+      'DELETE FROM companies WHERE name = ANY($1::text[]) RETURNING id, name',
+      [DUMMY_COMPANIES]
+    );
+    
+    res.json({
+      success: true,
+      deleted: result.rows,
+      count: result.rowCount
+    });
+  } catch (error) {
+    console.error('Delete dummy data error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/companies
+ * List all companies in database
+ */
+app.get('/api/admin/companies', async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT id, name, stage, created_at FROM companies ORDER BY created_at DESC'
+    );
+    res.json({ success: true, companies: result.rows });
+  } catch (error) {
+    console.error('List companies error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // RESEARCH ENDPOINTS
 // ============================================
 
