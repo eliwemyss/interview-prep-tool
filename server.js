@@ -8,6 +8,7 @@ const db = require('./lib/database');
 const { performResearch } = require('./lib/research');
 const { performDeepResearch } = require('./lib/deep-research');
 const { connectGoogleCalendar, getUpcomingEvents, extractCompanyName } = require('./lib/google-calendar');
+const { testTriggerConnection, triggerResearchJob } = require('./lib/trigger-client');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,6 +56,43 @@ app.post('/api/setup-db', async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to initialize database',
       details: error.message 
+    });
+  }
+});
+
+// ============================================
+// INTEGRATION TESTS
+// ============================================
+
+app.get('/api/test/trigger', async (req, res) => {
+  try {
+    const result = await testTriggerConnection();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      connected: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/test/calendar', async (req, res) => {
+  try {
+    const hasClientId = !!process.env.GOOGLE_CLIENT_ID;
+    const hasClientSecret = !!process.env.GOOGLE_CLIENT_SECRET;
+    
+    res.json({
+      configured: hasClientId && hasClientSecret,
+      hasClientId,
+      hasClientSecret,
+      message: hasClientId && hasClientSecret ? 
+        'Google OAuth configured' : 
+        'Google OAuth not configured'
+    });
+  } catch (error) {
+    res.status(500).json({
+      configured: false,
+      error: error.message
     });
   }
 });

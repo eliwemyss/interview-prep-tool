@@ -337,6 +337,7 @@
       <a href="/" class="nav-btn">← Research</a>
       <button class="nav-btn" onclick="showAddModal()">+ Add Company</button>
       <button class="nav-btn" onclick="refreshAll()">🔄 Refresh All</button>
+      <button class="nav-btn" onclick="connectCalendar()">📅 Connect Calendar</button>
     </div>
 
     <div class="stats" id="stats">
@@ -690,6 +691,21 @@
 
     function closeResearchModal() {
       document.getElementById('researchModal').classList.remove('show');
+    }
+
+    async function connectCalendar() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/calendar/connect`);
+        const data = await response.json();
+        
+        if (data.authUrl) {
+          window.open(data.authUrl, '_blank', 'width=600,height=600');
+        } else {
+          alert('Calendar connection configured! Check console for details.');
+        }
+      } catch (error) {
+        alert('Calendar feature requires Google OAuth setup. Check documentation.');
+      }
     }
 
     // Load pipeline on page load
