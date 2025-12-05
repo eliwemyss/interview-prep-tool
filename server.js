@@ -631,16 +631,30 @@ railway variables --set "GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}"
 
 /**
  * GET /api/calendar/events
- * Get upcoming calendar events
+ * Get upcoming calendar events from Google Calendar
  */
 app.get('/api/calendar/events', async (req, res) => {
   try {
-    const events = await db.getUpcomingCalendarEvents(7);
+    const googleCalendar = require('./lib/google-calendar');
+    
+    // Fetch live events from Google Calendar
+    const events = await googleCalendar.getUpcomingEvents(14);
+    
+    // Extract company names and return
+    const formattedEvents = events.map(event => ({
+      event_id: event.id,
+      summary: event.summary,
+      start_time: event.start.dateTime || event.start.date,
+      end_time: event.end.dateTime || event.end.date,
+      company_name: googleCalendar.extractCompanyName(event.summary),
+      description: event.description || '',
+      location: event.location || ''
+    }));
     
     res.json({
       success: true,
-      count: events.length,
-      events
+      count: formattedEvents.length,
+      events: formattedEvents
     });
     
   } catch (error) {
