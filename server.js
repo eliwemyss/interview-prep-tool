@@ -589,12 +589,43 @@ app.get('/api/calendar/callback', async (req, res) => {
       return res.status(400).send('Authorization code missing');
     }
     
-    // TODO: Handle OAuth token exchange
-    res.send('<h1>Calendar Connected!</h1><p>You can close this window.</p>');
+    // Exchange authorization code for tokens
+    const googleCalendar = require('./lib/google-calendar');
+    const tokens = await googleCalendar.getTokensFromCode(code);
+    
+    if (tokens.refresh_token) {
+      // Save refresh token to Railway environment
+      console.log(`✅ Got Google refresh token, saving to environment`);
+      // Note: In production, this would need an admin endpoint to set env vars
+      // For now, we'll store it in memory and the user needs to set it manually
+      process.env.GOOGLE_REFRESH_TOKEN = tokens.refresh_token;
+      
+      res.send(`
+        <html>
+          <head><title>Calendar Connected</title></head>
+          <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h1>✅ Calendar Connected!</h1>
+            <p>Your Google Calendar has been successfully connected.</p>
+            <p>Your refresh token:</p>
+            <code style="background: #f0f0f0; padding: 10px; display: block; margin: 20px 0; word-break: break-all;">
+              ${tokens.refresh_token}
+            </code>
+            <p><strong>Important:</strong> Save this token and run:</p>
+            <pre style="background: #f0f0f0; padding: 10px; border-radius: 5px; text-align: left; display: inline-block;">
+railway variables --set "GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}"
+            </pre>
+            <p>Then: <code>railway redeploy</code></p>
+            <p><a href="/">← Go back to dashboard</a></p>
+          </body>
+        </html>
+      `);
+    } else {
+      res.send('<h1>⚠️ No refresh token received</h1><p>The connection may not have offline access. Try connecting again.</p>');
+    }
     
   } catch (error) {
     console.error('Calendar callback error:', error);
-    res.status(500).send('Error connecting calendar');
+    res.status(500).send(`<h1>Error connecting calendar</h1><p>${error.message}</p>`);
   }
 });
 
