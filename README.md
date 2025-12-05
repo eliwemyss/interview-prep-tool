@@ -1,74 +1,93 @@
 # 🎯 Interview Prep Tool
 
-> AI-powered interview preparation with automated company research and calendar integration
+> Production-ready AI interview preparation platform with automated research, calendar sync, and async job processing
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-blue.svg)](https://www.postgresql.org/)
+[![Trigger.dev](https://img.shields.io/badge/async-Trigger.dev%20v3-orange.svg)](https://trigger.dev/)
+[![Claude AI](https://img.shields.io/badge/AI-Claude%203%20Haiku-purple.svg)](https://anthropic.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Automatically research companies, track your interview pipeline, and get AI-generated prep materials delivered right before your interviews. Built with Claude AI, PostgreSQL, and Trigger.dev.
+A showcase-worthy interview preparation platform that automatically researches companies from your Google Calendar, generates AI-powered briefings with Claude, and delivers prep materials via email 24 hours before interviews. Built with modern async architecture using Trigger.dev v3 for production-scale reliability.
 
 ## ✨ Features
 
 ### 🔍 Intelligent Company Research
-- **Single Company Research**: Get comprehensive interview prep in 30 seconds
-- **Batch Processing**: Research multiple companies in parallel
-- **AI-Powered Analysis**: Claude analyzes company websites, GitHub repos, and tech stacks
-- **Comprehensive Reports**: Overview, tech stack, interview questions, prep tips, and more
+- **Async Job Processing**: Trigger.dev v3 handles long-running research tasks (30-60s) without blocking HTTP requests
+- **Automatic Retries**: 3 attempts with exponential backoff for web scraping, GitHub search, and AI analysis
+- **Parallel Processing**: Website scraping and GitHub search run simultaneously to reduce total time
+- **Real-time Progress**: Poll job status with `/api/research-status/:jobId` for live updates
+- **AI-Powered Analysis**: Claude 3 Haiku generates comprehensive briefings with interview questions, prep tips, and salary insights
+- **Deep Research Mode**: Includes Glassdoor-style reviews, salary ranges, and company culture analysis
 
-### 📊 Interview Pipeline Dashboard
-- **Track All Interviews**: Manage companies across different interview stages
-- **Visual Pipeline**: See at a glance where each interview stands
+### 📊 Interview Pipeline Dashboard (Dual Frontends)
+- **Vanilla HTML/CSS/JS**: Lightweight, fast, works without framework (631 lines)
+- **Next.js 14 Frontend**: TypeScript, Tailwind CSS, Zustand state management (production-ready)
+- **Full CRUD**: Add, update, delete, refresh companies with real-time UI updates
 - **Stage Management**: Applied → Screening → Technical → Final → Offer
-- **Research History**: Keep track of when companies were last researched
-- **Notes & Scheduling**: Add notes and schedule interview dates
+- **Research History**: Versioned research snapshots with timestamp tracking
+- **Notes & Scheduling**: Add interview notes and schedule dates
 
-### 🤖 Automation with Trigger.dev
-- **Nightly Refresh**: Automatically update research for active companies
-- **Batch Jobs**: Process multiple companies in parallel
-- **Calendar Sync**: Auto-detect interviews from Google Calendar
-- **Email Alerts**: Get prep reports 24 hours before interviews
+### 🤖 Automation with Trigger.dev v3
+- **Calendar Sync Cron** (every 6 hours): Auto-sync Google Calendar, extract company names, queue research jobs
+- **Email Reminder Cron** (daily 9am): Send beautiful HTML prep emails 24 hours before interviews
+- **Nightly Refresh Cron** (daily 2am): Auto-refresh research for companies with interviews in next 14 days
+- **Job Status Tracking**: Database-backed job tracking with `batch_jobs` table
+- **Graceful Failures**: Individual task failures don't kill entire job pipeline
 
 ### 📅 Google Calendar Integration
-- **Auto-Detection**: Automatically find interview events
-- **Smart Parsing**: Extract company names from event titles
-- **Prep Emails**: Beautiful HTML emails with research summaries
-- **Upcoming Events**: Dashboard shows next 7 days of interviews
+- **Auto-Filter Interview Events**: Smart detection with `isInterviewEvent()` filters out personal appointments
+- **Company Name Extraction**: Regex patterns identify "Company A and Candidate" formats
+- **Auto-Research Trigger**: Calendar sync automatically queues research jobs for new companies
+- **Prep Email Delivery**: Beautiful HTML templates with research summaries sent 24h before
+- **OAuth2 Flow**: Secure Google OAuth with refresh token persistence
 
 ## 🏗️ Architecture
 
+### Async Flow (Showcase-Worthy)
 ```
-┌─────────────────┐
-│   Frontend      │  React-style vanilla JS
-│  (HTML/CSS/JS)  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Express API    │  RESTful endpoints
-│    (Node.js)    │
-└────┬─────┬──────┘
-     │     │
-     │     └──────────┐
-     ▼                ▼
-┌─────────┐    ┌──────────────┐
-│PostgreSQL│    │ Trigger.dev  │  Background jobs
-│ Database │    │   (Async)    │
-└─────────┘    └──────┬───────┘
-                      │
-         ┌────────────┼────────────┐
-         ▼            ▼            ▼
-    ┌────────┐  ┌─────────┐  ┌─────────┐
-    │Research│  │  Batch  │  │Calendar │
-    │  Job   │  │   Job   │  │  Sync   │
-    └────────┘  └─────────┘  └─────────┘
-                      │
-                      ▼
-              ┌───────────────┐
-              │  Claude API   │  AI analysis
-              │  GitHub API   │  Tech stack
-              │ Web Scraping  │  Company info
-              └───────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Frontend (Next.js or Vanilla)                              │
+│  ┌──────────────┐    ┌──────────────┐                       │
+│  │ Research Form│ -> │ POST /research│                       │
+│  │              │    │  -direct      │                       │
+│  └──────────────┘    └──────┬───────┘                       │
+│                              │ Returns jobId immediately     │
+│  ┌──────────────┐           ▼                                │
+│  │ Polling Loop │ <- GET /research-status/:jobId (every 2s)  │
+│  └──────────────┘                                            │
+└─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Express API (server.js - 831 lines)                        │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  20+ Endpoints:                                       │   │
+│  │  • /api/research-direct    (Queue job)                │   │
+│  │  • /api/research-status/:id (Poll status)             │   │
+│  │  • /api/calendar/sync      (Auto-research trigger)    │   │
+│  │  • /api/calendar/events    (Interview events only)    │   │
+│  │  • /api/pipeline           (CRUD companies)           │   │
+│  │  • /api/notifications/...  (Email reminders)          │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────┬──────────────────────┬────────────────────────┘
+              │                      │
+              ▼                      ▼
+┌──────────────────────┐   ┌──────────────────────────────────┐
+│  PostgreSQL          │   │  Trigger.dev v3 (Async Jobs)     │
+│  ┌────────────────┐  │   │  ┌────────────────────────────┐  │
+│  │ companies      │  │   │  │ companyResearchJob         │  │
+│  │ research_history│  │   │  │   ├─ scrapeWebsiteTask    │  │
+│  │ calendar_events│  │   │  │   ├─ searchGitHubTask     │  │
+│  │ batch_jobs     │  │   │  │   ├─ analyzeWithClaudeTask│  │
+│  └────────────────┘  │   │  │   └─ storeResearchTask    │  │
+└──────────────────────┘   │  └────────────────────────────┘  │
+                           │                                   │
+                           │  Scheduled Cron Jobs:             │
+                           │  • calendarSyncSchedule (6h)      │
+                           │  • interviewReminderSchedule (9am)│
+                           │  • nightlyRefreshSchedule (2am)   │
+                           └───────────────────────────────────┘
 ```
 
 ## 🚀 Quick Start
@@ -76,8 +95,10 @@ Automatically research companies, track your interview pipeline, and get AI-gene
 ### Prerequisites
 - Node.js ≥ 18.0.0
 - PostgreSQL database
-- Anthropic API key (Claude)
-- (Optional) Trigger.dev account
+- Anthropic API key (Claude 3 Haiku)
+- Trigger.dev account (free tier available)
+- (Optional) Google Calendar OAuth credentials
+- (Optional) SMTP server for email reminders
 - (Optional) Google Calendar OAuth credentials
 
 ### 1. Clone & Install

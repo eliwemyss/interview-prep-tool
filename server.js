@@ -648,8 +648,8 @@ app.get('/api/calendar/events', async (req, res) => {
   try {
     const googleCalendar = require('./lib/google-calendar');
     
-    // Fetch live events from Google Calendar
-    const events = await googleCalendar.getUpcomingEvents(14);
+    // Fetch live INTERVIEW events from Google Calendar (auto-filtered)
+    const events = await googleCalendar.getInterviewEvents(14);
     
     // Extract company names and return
     const formattedEvents = events.map(event => ({
@@ -683,11 +683,81 @@ app.get('/api/calendar/events', async (req, res) => {
  */
 app.post('/api/calendar/sync', async (req, res) => {
   try {
-    // TODO: Implement calendar sync logic
+    const googleCalendar = require('./lib/google-calendar');
+    
+    // Fetch interview events from Google Calendar
+    const events = await googleCalendar.getInterviewEvents(14);
+    
+    const syncResults = {
+      total: events.length,
+      synced: 0,
+      skipped: 0,
+      researched: 0,
+      companies: []
+    };
+    
+    // Process each event
+    for (const event of events) {
+      const companyName = googleCalendar.extractCompanyName(event.summary);
+      
+      if (!companyName) {
+        syncResults.skipped++;
+        continue;
+      }
+      
+      // Store calendar event in database
+      await db.addCalendarEvent({
+        event_id: event.id,
+        summary: event.summary,
+        start_time: event.start.dateTime || event.start.date,
+        end_time: event.end.dateTime || event.end.date,
+        company_name: companyName
+      });
+      syncResults.synced++;
+      
+      // Check if company already has research
+      const existingCompany = await db.getCompanyByName(companyName);
+      
+      if (!existingCompany && triggerClient) {
+        // Auto-trigger research for new companies
+        const jobId = uuidv4();
+        const payload = {
+          jobId,
+          companyName,
+          companyUrl: null,
+          role: 'Software Engineer', // Default role
+          deepMode: true
+        };
+        
+        try {
+          await triggerClient.queueResearchJob(payload);
+          syncResults.researched++;
+          syncResults.companies.push({
+            name: companyName,
+            status: 'research_queued',
+            jobId
+          });
+        } catch (triggerError) {
+          console.warn(`Failed to queue research for ${companyName}:`, triggerError.message);
+          syncResults.companies.push({
+            name: companyName,
+            status: 'research_failed',
+            error: triggerError.message
+          });
+        }
+      } else if (existingCompany) {
+        syncResults.companies.push({
+          name: companyName,
+          status: 'already_exists',
+          companyId: existingCompany.id
+        });
+      }
+    }
+    
     res.json({
       success: true,
-      message: 'Calendar sync triggered',
-      note: 'This feature requires Google Calendar OAuth setup'
+      message: `Synced ${syncResults.synced} calendar events, queued ${syncResults.researched} research jobs`,
+      ...syncResults
     });
     
   } catch (error) {
