@@ -1,254 +1,342 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { CompanyCard, Company } from '../components/CompanyCard';
-import { CompanyModal } from '../components/CompanyModal';
-import { Plus, Briefcase, Calendar, TrendingUp, Mail, RefreshCw } from 'lucide-react';
-import axios from 'axios';
-import { usePostHog } from 'posthog-js/react';
+import { useEffect, useMemo, useState } from 'react';
+import AnalyticsHeader from '@/components/AnalyticsHeader';
+import PipelineBoard from '@/components/PipelineBoard';
+import ResearchModal from '@/components/ResearchModal';
+import JobToast from '@/components/JobToast';
+import ErrorToast from '@/components/ErrorToast';
+import { analyticsAPI, calendarAPI, checklistAPI, feedbackAPI, gmailAPI, pipelineAPI, salaryAPI } from '@/lib/api';
+import { useAppStore } from '@/lib/store';
+import { Company, Stage } from '@/lib/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+export default function DashboardPage() {
+  const {
+    companies,
+    setCompanies,
+    updateCompanyStage,
+    selectCompany,
+    selectedCompanyId,
+    checklists,
+    setChecklist,
+    salary,
+    setSalary,
+    feedback,
+    setFeedback,
+    analytics,
+    setAnalytics,
+  } = useAppStore();
 
-const stages = [
-  { id: 'screening', name: 'Screening', color: '#6b7280' },
-  { id: 'technical', name: 'Technical', color: '#1D4AFF' },
-  { id: 'final', name: 'Final Round', color: '#FF9B42' },
-  { id: 'offer', name: 'Offer', color: '#10b981' },
-];
-
-export default function Dashboard() {
-  const posthog = usePostHog();
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const [modalBusy, setModalBusy] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [jobToast, setJobToast] = useState<{ message: string; status: 'queued' | 'running' | 'done' } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [stageFilter, setStageFilter] = useState<Stage | 'all'>('all');
 
+  const selectedCompany = useMemo(
+    () => companies.find((c) => c.id === selectedCompanyId) || null,
+    [companies, selectedCompanyId]
+  );
+
+  const filteredCompanies = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return companies.filter((c) => {
+      const matchesStage = stageFilter === 'all' || c.stage === stageFilter;
+      const matchesSearch = term
+        ? c.name.toLowerCase().includes(term) || (c.notes || '').toLowerCase().includes(term)
+        : true;
+      return matchesStage && matchesSearch;
+    });
+  }, [companies, searchTerm, stageFilter]);
+
+  // Initial load: pipeline + analytics + auto calendar sync
   useEffect(() => {
-    loadCompanies();
-    posthog?.capture('dashboard_viewed');
-  }, []);
+    const load = async () => {
+      try {
+        const [pipelineRes, analyticsRes] = await Promise.all([
+          pipelineAPI.getAll(),
+          analyticsAPI.getPipeline().catch(() => null),
+        ]);
 
-  const loadCompanies = async () => {
+        const fetchedCompanies: Company[] = pipelineRes.data.companies || [];
+        setCompanies(fetchedCompanies);
+        if (analyticsRes?.data) {
+          setAnalytics(analyticsRes.data);
+        }
+
+        // Auto-sync calendar on mount (silent fail if not configured)
+        try {
+          await calendarAPI.sync();
+          const refreshed = await pipelineAPI.getAll();
+          setCompanies(refreshed.data.companies || []);
+        } catch (syncErr) {
+          // Silent fail - calendar might not be configured
+          console.log('Calendar sync skipped:', syncErr);
+        }
+      } catch (err: any) {
+        setInlineError(err?.message || 'Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [setCompanies, setAnalytics]);
+
+  // Fetch modal data when selection changes
+  useEffect(() => {
+    const loadAux = async () => {
+      if (!selectedCompanyId) return;
+      try {
+        const [checklistRes, salaryRes, feedbackRes] = await Promise.all([
+          checklists[selectedCompanyId]
+            ? Promise.resolve(null)
+            : checklistAPI.get(selectedCompanyId),
+          salary[selectedCompanyId]
+            ? Promise.resolve(null)
+            : salaryAPI.get(selectedCompanyId),
+          feedback[selectedCompanyId]
+            ? Promise.resolve(null)
+            : feedbackAPI.get(selectedCompanyId),
+        ]);
+
+        if (checklistRes?.data) setChecklist(selectedCompanyId, checklistRes.data.checklist);
+        if (salaryRes?.data) setSalary(selectedCompanyId, salaryRes.data.salary);
+        if (feedbackRes?.data) setFeedback(selectedCompanyId, feedbackRes.data.feedback);
+      } catch (err) {
+        // soft fail
+      }
+    };
+
+    loadAux();
+  }, [selectedCompanyId, checklists, salary, feedback, setChecklist, setSalary, setFeedback]);
+
+  const handleStageChange = async (id: number, stage: Stage) => {
+    updateCompanyStage(id, stage);
     try {
-      const response = await axios.get(`${API_URL}/api/pipeline`);
-      const fetchedCompanies = response.data.companies || response.data || [];
-      setCompanies(fetchedCompanies);
-    } catch (error) {
-      console.error('Failed to load companies:', error);
-    } finally {
-      setLoading(false);
+      await pipelineAPI.update(id, { stage });
+    } catch (err) {
+      setInlineError('Failed to update stage');
     }
   };
 
-  const syncCalendar = async () => {
-    setSyncing(true);
-    posthog?.capture('calendar_sync_started');
+  const handleRefreshResearch = async (id: number) => {
+    setJobToast({ message: 'Research queued...', status: 'queued' });
+    setModalBusy(true);
     try {
-      await axios.post(`${API_URL}/api/calendar/sync`);
-      await loadCompanies();
-      posthog?.capture('calendar_synced', { success: true });
-    } catch (error) {
-      console.error('Failed to sync calendar:', error);
-      posthog?.capture('calendar_synced', { success: false, error: String(error) });
+      setJobToast({ message: 'Research running...', status: 'running' });
+      await pipelineAPI.refresh(id);
+      const pipelineRes = await pipelineAPI.getAll();
+      setCompanies(pipelineRes.data.companies || []);
+      setJobToast({ message: 'Research complete', status: 'done' });
+      setTimeout(() => setJobToast(null), 1500);
+    } catch (err) {
+      setInlineError('Refresh failed');
+      setJobToast(null);
     } finally {
-      setSyncing(false);
+      setModalBusy(false);
     }
   };
 
-  const syncGmail = async () => {
-    setSyncing(true);
-    posthog?.capture('gmail_sync_started');
+  const handleToggleChecklist = async (itemId: number, completed: boolean) => {
+    if (!selectedCompanyId) return;
+    const existing = checklists[selectedCompanyId] || [];
+    setChecklist(
+      selectedCompanyId,
+      existing.map((item) => (item.id === itemId ? { ...item, completed } : item))
+    );
+
     try {
-      const response = await axios.post(`${API_URL}/api/gmail/sync`);
-      await loadCompanies();
-      posthog?.capture('gmail_synced', {
-        success: true,
-        jobTitlesFound: response.data.jobTitlesFound,
-        interviewersFound: response.data.interviewersFound,
-      });
-    } catch (error) {
-      console.error('Failed to sync Gmail:', error);
-      posthog?.capture('gmail_synced', { success: false, error: String(error) });
-    } finally {
-      setSyncing(false);
+      const res = await checklistAPI.toggle(itemId, completed);
+      setChecklist(
+        selectedCompanyId,
+        existing.map((item) => (item.id === itemId ? res.data.item : item))
+      );
+    } catch (err) {
+      setInlineError('Unable to update checklist');
     }
   };
 
-  const openCompanyModal = (company: Company) => {
-    setSelectedCompany(company);
-    setModalOpen(true);
-    posthog?.capture('company_modal_opened', { companyName: company.company_name });
+  const checklistProgress = useMemo(() => {
+    const progress: Record<number, { done: number; total: number }> = {};
+    Object.entries(checklists).forEach(([cid, items]) => {
+      const total = items.length;
+      const done = items.filter((i) => i.completed).length;
+      progress[Number(cid)] = { done, total };
+    });
+    return progress;
+  }, [checklists]);
+
+  const handleAddChecklist = async (text: string) => {
+    if (!selectedCompanyId) return;
+    setModalBusy(true);
+    try {
+      const res = await checklistAPI.add(selectedCompanyId, [text]);
+      const existing = checklists[selectedCompanyId] || [];
+      setChecklist(selectedCompanyId, [...existing, ...(res.data.items || [])]);
+    } catch (err) {
+      setInlineError('Unable to add checklist item');
+    } finally {
+      setModalBusy(false);
+    }
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setTimeout(() => setSelectedCompany(null), 300);
+  const handleAddFeedback = async (payload: any) => {
+    if (!selectedCompanyId) return;
+    setModalBusy(true);
+    try {
+      const res = await feedbackAPI.add(selectedCompanyId, payload);
+      const existing = feedback[selectedCompanyId] || [];
+      setFeedback(selectedCompanyId, [res.data.feedback, ...existing]);
+    } catch (err) {
+      setInlineError('Unable to save feedback');
+    } finally {
+      setModalBusy(false);
+    }
   };
 
-  const getCompaniesByStage = (stageId: string) => {
-    return companies.filter((c) => c.stage === stageId);
-  };
-
-  const stats = {
-    total: companies.length,
-    active: companies.filter((c) => ['screening', 'technical', 'final'].includes(c.stage)).length,
-    offers: companies.filter((c) => c.stage === 'offer').length,
-    successRate: companies.length > 0
-      ? Math.round((companies.filter((c) => c.stage === 'offer').length / companies.length) * 100)
-      : 0,
+  const handleAddCompany = async () => {
+    if (!newCompanyName.trim()) return;
+    try {
+      const res = await pipelineAPI.add({ companyName: newCompanyName.trim(), stage: 'research' });
+      const refreshed = await pipelineAPI.getAll();
+      setCompanies(refreshed.data.companies || []);
+      setNewCompanyName('');
+    } catch (err) {
+      setInlineError('Failed to add company');
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-[#FF9B42] animate-spin mx-auto mb-4" />
-          <p className="text-[#9ca3af]">Loading your pipeline...</p>
-        </div>
+      <div className="flex h-80 items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-sky-400"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-[#FF9B42] to-[#F9BD2B] bg-clip-text text-transparent">
-            Interview Pipeline
-          </h1>
-          <p className="text-[#9ca3af] mt-2">
-            Track your interviews, research companies, and negotiate offers
-          </p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Pipeline</p>
+          <h1 className="text-3xl font-semibold text-white">Interview Control Center</h1>
+          <p className="text-slate-400">Live analytics, research, checklists, and salary intel.</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button
-            variant="ghost"
-            onClick={syncGmail}
-            loading={syncing}
-            icon={<Mail className="w-4 h-4" />}
+        <div className="flex gap-2">
+          <input
+            value={newCompanyName}
+            onChange={(e) => setNewCompanyName(e.target.value)}
+            placeholder="Add company to pipeline"
+            className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+          />
+          <button
+            onClick={handleAddCompany}
+            className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
           >
-            Sync Gmail
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={syncCalendar}
-            loading={syncing}
-            icon={<Calendar className="w-4 h-4" />}
+            Add
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                setJobToast({ message: 'Syncing calendar...', status: 'queued' });
+                await calendarAPI.sync();
+                const refreshed = await pipelineAPI.getAll();
+                setCompanies(refreshed.data.companies || []);
+                setJobToast({ message: 'Calendar synced', status: 'done' });
+                setTimeout(() => setJobToast(null), 1500);
+              } catch (err: any) {
+                setInlineError(err?.response?.data?.message || 'Calendar sync failed');
+                setJobToast(null);
+              }
+            }}
+            className="rounded-md bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500"
           >
             Sync Calendar
-          </Button>
-          <Button variant="primary" icon={<Plus className="w-4 h-4" />}>
-            Add Company
-          </Button>
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                setJobToast({ message: 'Syncing Gmail...', status: 'queued' });
+                await gmailAPI.sync();
+                const refreshed = await pipelineAPI.getAll();
+                setCompanies(refreshed.data.companies || []);
+                setJobToast({ message: 'Gmail synced', status: 'done' });
+                setTimeout(() => setJobToast(null), 1500);
+              } catch (err: any) {
+                setInlineError(err?.response?.data?.message || 'Gmail sync failed');
+                setJobToast(null);
+              }
+            }}
+            className="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+          >
+            Sync Gmail
+          </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-[#9ca3af] mb-1">Total Companies</p>
-                <p className="text-3xl font-bold text-white">{stats.total}</p>
-              </div>
-              <div className="w-12 h-12 bg-[#25272a] rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-[#FF9B42]" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-[#9ca3af] mb-1">Active Interviews</p>
-                <p className="text-3xl font-bold text-white">{stats.active}</p>
-              </div>
-              <div className="w-12 h-12 bg-[#25272a] rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-[#1D4AFF]" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-[#9ca3af] mb-1">Offers</p>
-                <p className="text-3xl font-bold text-white">{stats.offers}</p>
-              </div>
-              <div className="w-12 h-12 bg-[#25272a] rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-[#10b981]" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-[#9ca3af] mb-1">Success Rate</p>
-                <p className="text-3xl font-bold text-white">{stats.successRate}%</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-r from-[#FF9B42] to-[#F9BD2B] rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex gap-2">
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search company/notes"
+            className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+          />
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value as Stage | 'all')}
+            className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+          >
+            <option value="all">All stages</option>
+            <option value="research">Research</option>
+            <option value="applied">Applied</option>
+            <option value="screening">Screening</option>
+            <option value="technical">Technical</option>
+            <option value="final">Final</option>
+            <option value="offer">Offer</option>
+            <option value="hired">Hired</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
       </div>
 
-      {/* Kanban Board */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {stages.map((stage) => {
-          const stageCompanies = getCompaniesByStage(stage.id);
-          return (
-            <div key={stage.id}>
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-white">{stage.name}</h3>
-                  <span className="px-2 py-0.5 text-xs bg-[#25272a] text-[#9ca3af] rounded-full">
-                    {stageCompanies.length}
-                  </span>
-                </div>
-                <div
-                  className="h-1 rounded-full"
-                  style={{ backgroundColor: stage.color }}
-                />
-              </div>
+      {inlineError && (
+        <div className="rounded-lg border border-red-700 bg-red-900/40 px-4 py-3 text-sm text-red-100">
+          {inlineError}
+        </div>
+      )}
 
-              <div className="space-y-3 min-h-[400px]">
-                {stageCompanies.length === 0 ? (
-                  <Card>
-                    <CardContent className="pt-6 pb-6">
-                      <p className="text-sm text-[#6b7280] text-center">No companies yet</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  stageCompanies.map((company) => (
-                    <CompanyCard
-                      key={company.id}
-                      company={company}
-                      onClick={() => openCompanyModal(company)}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <AnalyticsHeader analytics={analytics} />
 
-      {/* Company Modal */}
-      <CompanyModal company={selectedCompany} isOpen={modalOpen} onClose={closeModal} />
+      <PipelineBoard
+        companies={filteredCompanies}
+        onStageChange={handleStageChange}
+        onSelect={(id) => selectCompany(id)}
+        onRefresh={handleRefreshResearch}
+        checklistProgress={checklistProgress}
+      />
+
+      {selectedCompany && (
+        <ResearchModal
+          companyName={selectedCompany.name}
+          research={(selectedCompany.researchData as any) || null}
+          checklist={checklists[selectedCompany.id] || []}
+          salary={salary[selectedCompany.id] || []}
+          feedback={feedback[selectedCompany.id] || []}
+          onClose={() => selectCompany(null)}
+          onToggleChecklist={handleToggleChecklist}
+          onAddChecklist={handleAddChecklist}
+          onRefreshResearch={() => handleRefreshResearch(selectedCompany.id)}
+          onAddFeedback={handleAddFeedback}
+          busy={modalBusy}
+        />
+      )}
+
+      <JobToast toast={jobToast} />
+      <ErrorToast message={inlineError} onClear={() => setInlineError(null)} />
     </div>
   );
 }
