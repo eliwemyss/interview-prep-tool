@@ -14,15 +14,38 @@ interface PipelineBoardProps {
   onStageChange: (id: number, stage: Stage) => void;
   onSelect: (id: number) => void;
   onRefresh: (id: number) => void;
+  checklistProgress?: Record<number, { done: number; total: number }>;
 }
 
-export default function PipelineBoard({ companies, onStageChange, onSelect, onRefresh }: PipelineBoardProps) {
+export default function PipelineBoard({ companies, onStageChange, onSelect, onRefresh, checklistProgress = {} }: PipelineBoardProps) {
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    e.dataTransfer.setData('text/plain', String(id));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, stage: Stage) => {
+    e.preventDefault();
+    const id = Number(e.dataTransfer.getData('text/plain'));
+    if (!id) return;
+    onStageChange(id, stage);
+  };
+
+  const allowDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
   return (
     <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
       {COLUMNS.map((column) => {
         const items = companies.filter((c) => c.stage === column.key);
         return (
-          <div key={column.key} className="space-y-3">
+          <div
+            key={column.key}
+            className="space-y-3"
+            onDragOver={allowDrop}
+            onDrop={(e) => handleDrop(e, column.key)}
+          >
             <div className={`rounded-lg border border-slate-800 bg-gradient-to-r ${column.tone} px-3 py-2`}> 
               <div className="flex items-center justify-between">
                 <div>
@@ -37,6 +60,8 @@ export default function PipelineBoard({ companies, onStageChange, onSelect, onRe
                 <article
                   key={company.id}
                   className="rounded-xl border border-slate-800 bg-slate-900/70 backdrop-blur px-3 py-3 shadow-lg shadow-slate-900/40"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, company.id)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -56,6 +81,11 @@ export default function PipelineBoard({ companies, onStageChange, onSelect, onRe
                     )}
                     {company.lastResearched && (
                       <p>Researched: {new Date(company.lastResearched).toLocaleDateString()}</p>
+                    )}
+                    {checklistProgress[company.id] && checklistProgress[company.id].total > 0 && (
+                      <p>
+                        Checklist: {checklistProgress[company.id].done}/{checklistProgress[company.id].total}
+                      </p>
                     )}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AnalyticsHeader from '@/components/AnalyticsHeader';
 import PipelineBoard from '@/components/PipelineBoard';
 import ResearchModal from '@/components/ResearchModal';
+import JobToast from '@/components/JobToast';
 import { analyticsAPI, checklistAPI, feedbackAPI, pipelineAPI, salaryAPI } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { Company, Stage } from '@/lib/types';
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const [modalBusy, setModalBusy] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [newCompanyName, setNewCompanyName] = useState('');
+  const [jobToast, setJobToast] = useState<{ message: string; status: 'queued' | 'running' | 'done' } | null>(null);
 
   const selectedCompany = useMemo(
     () => companies.find((c) => c.id === selectedCompanyId) || null,
@@ -97,13 +99,18 @@ export default function DashboardPage() {
   };
 
   const handleRefreshResearch = async (id: number) => {
+    setJobToast({ message: 'Research queued...', status: 'queued' });
     setModalBusy(true);
     try {
+      setJobToast({ message: 'Research running...', status: 'running' });
       await pipelineAPI.refresh(id);
       const pipelineRes = await pipelineAPI.getAll();
       setCompanies(pipelineRes.data.companies || []);
+      setJobToast({ message: 'Research complete', status: 'done' });
+      setTimeout(() => setJobToast(null), 1500);
     } catch (err) {
       setInlineError('Refresh failed');
+      setJobToast(null);
     } finally {
       setModalBusy(false);
     }
@@ -127,6 +134,16 @@ export default function DashboardPage() {
       setInlineError('Unable to update checklist');
     }
   };
+
+  const checklistProgress = useMemo(() => {
+    const progress: Record<number, { done: number; total: number }> = {};
+    Object.entries(checklists).forEach(([cid, items]) => {
+      const total = items.length;
+      const done = items.filter((i) => i.completed).length;
+      progress[Number(cid)] = { done, total };
+    });
+    return progress;
+  }, [checklists]);
 
   const handleAddChecklist = async (text: string) => {
     if (!selectedCompanyId) return;
@@ -213,6 +230,7 @@ export default function DashboardPage() {
         onStageChange={handleStageChange}
         onSelect={(id) => selectCompany(id)}
         onRefresh={handleRefreshResearch}
+        checklistProgress={checklistProgress}
       />
 
       {selectedCompany && (
@@ -230,6 +248,8 @@ export default function DashboardPage() {
           busy={modalBusy}
         />
       )}
+
+      <JobToast toast={jobToast} />
     </div>
   );
 }

@@ -41,6 +41,7 @@ export default function ResearchModal({
   });
 
   const prepItems = research?.prepChecklist || [];
+  const sources = research?.sources || {};
 
   const renderResearch = () => (
     <div className="space-y-4">
@@ -48,6 +49,21 @@ export default function ResearchModal({
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
           <h3 className="text-lg font-semibold text-slate-50">Executive Summary</h3>
           <p className="text-sm text-slate-200 mt-2 leading-relaxed">{research.executiveSummary}</p>
+        </div>
+      )}
+      {(sources.website || sources.github) && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <h3 className="text-lg font-semibold text-slate-50">Sources</h3>
+          <div className="mt-2 space-y-1 text-sm text-slate-200">
+            {sources.website && (
+              <a className="text-sky-300 hover:text-sky-100 underline" href={sources.website} target="_blank" rel="noreferrer">
+                Website
+              </a>
+            )}
+            {sources.github && (
+              <p className="text-slate-300">{sources.github}</p>
+            )}
+          </div>
         </div>
       )}
       {research?.keyTalkingPoints && research.keyTalkingPoints.length > 0 && (
@@ -58,6 +74,12 @@ export default function ResearchModal({
               <li key={idx}>• {pt}</li>
             ))}
           </ul>
+        </div>
+      )}
+      {research?.metadata?.role && (
+        <div className="rounded-lg border border-emerald-700 bg-emerald-900/40 p-4">
+          <h3 className="text-lg font-semibold text-emerald-100">Role Focus</h3>
+          <p className="text-sm text-emerald-50 mt-1">{research.metadata.role}</p>
         </div>
       )}
       {research?.smartQuestions && research.smartQuestions.length > 0 && (
