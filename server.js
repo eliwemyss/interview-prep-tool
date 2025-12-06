@@ -112,7 +112,7 @@ app.get('/api/test/calendar', async (req, res) => {
 app.delete('/api/admin/dummy-data', async (req, res) => {
   try {
     const DUMMY_COMPANIES = [
-      'Railway', 'PostHog', 'Toast', 'Stripe', 
+      'Railway', 'Toast', 'Stripe', 
       'Anthropic', 'Vercel', 'Trigger.dev'
     ];
     
@@ -709,7 +709,7 @@ app.post('/api/calendar/sync', async (req, res) => {
         continue;
       }
       
-      // Normalize company name to prevent duplicates (e.g., "Group" -> "PostHog")
+      // Normalize company name to prevent duplicates
       companyName = normalizeCompanyName(companyName);
       
       // Create dedup key: company name + date (without time)

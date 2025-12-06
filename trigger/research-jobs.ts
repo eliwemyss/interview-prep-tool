@@ -31,7 +31,6 @@ export const scrapeWebsiteTask = task({
     try {
       const knownCompanies: { [key: string]: string } = {
         railway: "https://railway.app",
-        posthog: "https://posthog.com",
         toast: "https://pos.toasttab.com",
         stripe: "https://stripe.com",
         "trigger.dev": "https://trigger.dev",

@@ -5,7 +5,8 @@ import AnalyticsHeader from '@/components/AnalyticsHeader';
 import PipelineBoard from '@/components/PipelineBoard';
 import ResearchModal from '@/components/ResearchModal';
 import JobToast from '@/components/JobToast';
-import { analyticsAPI, checklistAPI, feedbackAPI, pipelineAPI, salaryAPI } from '@/lib/api';
+import ErrorToast from '@/components/ErrorToast';
+import { analyticsAPI, calendarAPI, checklistAPI, feedbackAPI, pipelineAPI, salaryAPI } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { Company, Stage } from '@/lib/types';
 
@@ -31,13 +32,26 @@ export default function DashboardPage() {
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [newCompanyName, setNewCompanyName] = useState('');
   const [jobToast, setJobToast] = useState<{ message: string; status: 'queued' | 'running' | 'done' } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [stageFilter, setStageFilter] = useState<Stage | 'all'>('all');
 
   const selectedCompany = useMemo(
     () => companies.find((c) => c.id === selectedCompanyId) || null,
     [companies, selectedCompanyId]
   );
 
-  // Initial load: pipeline + analytics
+  const filteredCompanies = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return companies.filter((c) => {
+      const matchesStage = stageFilter === 'all' || c.stage === stageFilter;
+      const matchesSearch = term
+        ? c.name.toLowerCase().includes(term) || (c.notes || '').toLowerCase().includes(term)
+        : true;
+      return matchesStage && matchesSearch;
+    });
+  }, [companies, searchTerm, stageFilter]);
+
+  // Initial load: pipeline + analytics + auto calendar sync
   useEffect(() => {
     const load = async () => {
       try {
@@ -50,6 +64,16 @@ export default function DashboardPage() {
         setCompanies(fetchedCompanies);
         if (analyticsRes?.data) {
           setAnalytics(analyticsRes.data);
+        }
+
+        // Auto-sync calendar on mount (silent fail if not configured)
+        try {
+          await calendarAPI.sync();
+          const refreshed = await pipelineAPI.getAll();
+          setCompanies(refreshed.data.companies || []);
+        } catch (syncErr) {
+          // Silent fail - calendar might not be configured
+          console.log('Calendar sync skipped:', syncErr);
         }
       } catch (err: any) {
         setInlineError(err?.message || 'Failed to load data');
@@ -214,6 +238,50 @@ export default function DashboardPage() {
           >
             Add
           </button>
+          <button
+            onClick={async () => {
+              try {
+                setJobToast({ message: 'Syncing calendar...', status: 'queued' });
+                await calendarAPI.sync();
+                const refreshed = await pipelineAPI.getAll();
+                setCompanies(refreshed.data.companies || []);
+                setJobToast({ message: 'Calendar synced', status: 'done' });
+                setTimeout(() => setJobToast(null), 1500);
+              } catch (err: any) {
+                setInlineError(err?.response?.data?.message || 'Calendar sync failed');
+                setJobToast(null);
+              }
+            }}
+            className="rounded-md bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500"
+          >
+            Sync Calendar
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex gap-2">
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search company/notes"
+            className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+          />
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value as Stage | 'all')}
+            className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+          >
+            <option value="all">All stages</option>
+            <option value="research">Research</option>
+            <option value="applied">Applied</option>
+            <option value="screening">Screening</option>
+            <option value="technical">Technical</option>
+            <option value="final">Final</option>
+            <option value="offer">Offer</option>
+            <option value="hired">Hired</option>
+            <option value="rejected">Rejected</option>
+          </select>
         </div>
       </div>
 
@@ -226,7 +294,7 @@ export default function DashboardPage() {
       <AnalyticsHeader analytics={analytics} />
 
       <PipelineBoard
-        companies={companies}
+        companies={filteredCompanies}
         onStageChange={handleStageChange}
         onSelect={(id) => selectCompany(id)}
         onRefresh={handleRefreshResearch}
@@ -250,6 +318,7 @@ export default function DashboardPage() {
       )}
 
       <JobToast toast={jobToast} />
+      <ErrorToast message={inlineError} onClear={() => setInlineError(null)} />
     </div>
   );
 }

@@ -16,7 +16,6 @@ const pool = new Pool({
 // List of known dummy company names
 const DUMMY_COMPANIES = [
   'Railway',
-  'PostHog', 
   'Toast',
   'Stripe',
   'Anthropic',

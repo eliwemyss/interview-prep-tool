@@ -82,6 +82,12 @@ export const feedbackAPI = {
   add: (companyId: number, payload: Partial<FeedbackEntry>) => api.post(`/api/pipeline/${companyId}/feedback`, payload),
 };
 
+// Calendar endpoints
+export const calendarAPI = {
+  sync: () => api.post('/api/calendar/sync'),
+  getEvents: () => api.get('/api/calendar/events'),
+};
+
 // Health check
 export const healthAPI = {
   check: () => api.get('/health'),
