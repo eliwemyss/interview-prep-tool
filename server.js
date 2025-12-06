@@ -9,7 +9,7 @@ const { performResearch } = require('./lib/research');
 const { performDeepResearch } = require('./lib/deep-research');
 const { performEnhancedResearch } = require('./lib/enhanced-research');
 const { generateInterviewBriefing } = require('./lib/interview-briefing');
-const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName, normalizeCompanyName } = require('./lib/google-calendar');
+const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName, extractJobTitle, normalizeCompanyName } = require('./lib/google-calendar');
 const { sendPrepEmail } = require('./lib/email');
 const { triggerClient } = require('./lib/trigger-client');
 
@@ -727,8 +727,16 @@ app.post('/api/calendar/sync', async (req, res) => {
       
       // If company doesn't exist, create it
       if (!existingCompany) {
+        const jobTitle = event.jobTitle || 'Software Engineer';
         await db.addCompanyToPipeline(companyName, 'screening', event.startTime, `Auto-added from calendar: ${event.summary}`);
         existingCompany = await db.getCompany(companyName);
+        if (existingCompany && jobTitle) {
+          // Update the company's notes with job title for research context
+          await db.query(
+            `UPDATE companies SET notes = $1 WHERE id = $2`,
+            [`Job Title: ${jobTitle}`, existingCompany.id]
+          );
+        }
       }
       
       // Store calendar event in database
@@ -750,7 +758,7 @@ app.post('/api/calendar/sync', async (req, res) => {
           jobId,
           companyName,
           companyUrl: null,
-          role: 'Software Engineer', // Default role
+          role: event.jobTitle || 'Software Engineer',
           deepMode: true
         };
         

@@ -421,12 +421,15 @@
 
     function renderCard(company) {
       const nextInterview = company.nextInterview ? new Date(company.nextInterview).toLocaleDateString() : null;
+      const jobTitle = company.notes && company.notes.startsWith('Job Title:') ? company.notes.replace('Job Title: ', '') : null;
+      const otherNotes = company.notes && !company.notes.startsWith('Job Title:') ? company.notes : null;
       
       return `
         <div class="card" draggable="true" data-id="${company.id}" ondragstart="drag(event)" onclick="editCompanyModal(${company.id})">
           <div class="card-title">${company.name}</div>
+          ${jobTitle ? `<div class="card-meta">💼 ${jobTitle}</div>` : ''}
           ${nextInterview ? `<div class="card-meta">📅 ${nextInterview}</div>` : ''}
-          ${company.notes ? `<div class="card-meta">${company.notes.substring(0, 50)}${company.notes.length > 50 ? '...' : ''}</div>` : ''}
+          ${otherNotes ? `<div class="card-meta">${otherNotes.substring(0, 50)}${otherNotes.length > 50 ? '...' : ''}</div>` : ''}
           <div class="card-actions" onclick="event.stopPropagation()">
             ${company.researchData ? `<button class="card-btn" onclick="viewResearch(${company.id})">📊 Research</button>` : `<button class="card-btn" onclick="triggerResearch(${company.id})">🔍 Research</button>`}
           </div>
