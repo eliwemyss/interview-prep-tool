@@ -1061,13 +1061,8 @@ app.post('/api/notifications/interview-reminders', async (req, res) => {
 // SERVE FRONTEND
 // ============================================
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
+// Serve Next.js static export from public/
+// All routes are handled by Next.js exported files
 
 // ============================================
 // ERROR HANDLING
