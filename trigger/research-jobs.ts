@@ -557,7 +557,7 @@ export const companyResearchJob = task({
       // Step 4: Generate prep checklist
       console.log("📝 Step 4: Generating prep checklist...");
       const checklistResult = await generatePrepChecklistTask.triggerAndWait({
-        companyId: storeResult.companyId,
+        companyId: storeResult.output.companyId,
         analysis,
       });
 
