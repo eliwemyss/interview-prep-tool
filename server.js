@@ -1326,10 +1326,42 @@ app.listen(PORT, async () => {
   const dbHealth = await db.testConnection();
   if (dbHealth.healthy) {
     console.log(`✅ Database connected`);
+
+    // Auto-run migrations on startup
+    try {
+      const fs = require('fs');
+      const path = require('path');
+
+      console.log('🔄 Checking for pending migrations...');
+
+      const migrationsDir = path.join(__dirname, 'migrations');
+      const migrationFiles = fs.readdirSync(migrationsDir)
+        .filter(file => file.endsWith('.sql'))
+        .sort();
+
+      for (const file of migrationFiles) {
+        try {
+          const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+          await db.query(sql);
+          console.log(`  ✅ ${file}`);
+        } catch (migError) {
+          // Migration might already be applied - that's OK
+          if (migError.code === '42701' || migError.code === '42P07') {
+            console.log(`  ⏭️  ${file} (already applied)`);
+          } else {
+            console.log(`  ⚠️  ${file}: ${migError.message}`);
+          }
+        }
+      }
+
+      console.log('✅ Migrations complete');
+    } catch (error) {
+      console.error('⚠️  Migration check failed:', error.message);
+    }
   } else {
     console.log(`❌ Database connection failed: ${dbHealth.error}`);
   }
-  
+
   console.log('\n📋 Available endpoints:');
   console.log('  GET  /health');
   console.log('  POST /api/research-direct');
