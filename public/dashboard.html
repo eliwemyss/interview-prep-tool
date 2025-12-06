@@ -292,6 +292,106 @@
       color: white;
     }
 
+    .modal-tabs {
+      display: flex;
+      gap: 0;
+      background: white;
+      border-bottom: 2px solid #dfe1e6;
+      padding: 0;
+    }
+
+    .modal-tab {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      color: #5e6c84;
+      font-size: 0.9em;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .modal-tab:hover {
+      color: #172b4d;
+      background: #f4f5f7;
+    }
+
+    .modal-tab.active {
+      color: #0079bf;
+      border-bottom-color: #0079bf;
+    }
+
+    .modal-tab-content {
+      display: none;
+    }
+
+    .modal-tab-content.active {
+      display: block;
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #f4f5f7;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .checklist-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .checklist-item.completed {
+      opacity: 0.6;
+    }
+
+    .checklist-item.completed label {
+      text-decoration: line-through;
+    }
+
+    .checklist-progress {
+      margin-bottom: 16px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #dfe1e6;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #61bd4f;
+      transition: width 0.3s;
+    }
+
+    .salary-box {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #61bd4f;
+      margin-bottom: 12px;
+    }
+
+    .salary-value {
+      font-size: 1.2em;
+      font-weight: 600;
+      color: #0079bf;
+    }
+
+    .salary-label {
+      font-size: 0.85em;
+      color: #5e6c84;
+      margin-top: 4px;
+    }
+
     @media (max-width: 768px) {
       .board {
         flex-direction: column;
@@ -326,51 +426,105 @@
         <h2 class="modal-title" id="editModalTitle">Edit Company</h2>
         <button class="close" onclick="closeEditModal()">&times;</button>
       </div>
-      <div class="modal-body">
-        <form id="editForm" onsubmit="saveCompany(event)">
-          <div class="form-group">
-            <label for="editCompanyName">Company Name</label>
-            <input type="text" id="editCompanyName" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="editStage">Stage</label>
-            <select id="editStage">
-              <option value="screening">Screening</option>
-              <option value="technical">Technical</option>
-              <option value="final">Final</option>
-              <option value="offer">Offer</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="editNextInterview">Next Interview</label>
-            <input type="datetime-local" id="editNextInterview">
-          </div>
-          
-          <div class="form-group">
-            <label for="editNotes">Notes</label>
-            <textarea id="editNotes" rows="3"></textarea>
-          </div>
-          
-          <div style="display: flex; gap: 10px;">
-            <button type="submit" class="btn btn-primary" style="flex: 1;">Save</button>
-            <button type="button" class="btn" onclick="deleteCompany()" style="background: #eb5a46;">Delete</button>
-          </div>
-        </form>
+      
+      <!-- Tabs -->
+      <div class="modal-tabs">
+        <button class="modal-tab active" onclick="switchTab('details')">Details</button>
+        <button class="modal-tab" onclick="switchTab('research')">📊 Research</button>
+        <button class="modal-tab" onclick="switchTab('checklist')">✅ Prep</button>
+        <button class="modal-tab" onclick="switchTab('salary')">💰 Salary</button>
+        <button class="modal-tab" onclick="switchTab('feedback')">📝 Feedback</button>
       </div>
-    </div>
-  </div>
 
-  <!-- Research Modal -->
-  <div id="researchModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title" id="researchModalTitle">Research</h2>
-        <button class="close" onclick="closeResearchModal()">&times;</button>
+      <div class="modal-body">
+        <!-- Details Tab -->
+        <div id="tab-details" class="modal-tab-content active">
+          <form id="editForm" onsubmit="saveCompany(event)">
+            <div class="form-group">
+              <label for="editCompanyName">Company Name</label>
+              <input type="text" id="editCompanyName" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editStage">Stage</label>
+              <select id="editStage">
+                <option value="screening">Screening</option>
+                <option value="technical">Technical</option>
+                <option value="final">Final</option>
+                <option value="offer">Offer</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="editNextInterview">Next Interview</label>
+              <input type="datetime-local" id="editNextInterview">
+            </div>
+            
+            <div class="form-group">
+              <label for="editNotes">Notes</label>
+              <textarea id="editNotes" rows="3"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+              <button type="submit" class="btn btn-primary" style="flex: 1;">Save</button>
+              <button type="button" class="btn" onclick="deleteCompany()" style="background: #eb5a46;">Delete</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Research Tab -->
+        <div id="tab-research" class="modal-tab-content">
+          <div id="researchTabContent">Loading research...</div>
+        </div>
+
+        <!-- Prep Checklist Tab -->
+        <div id="tab-checklist" class="modal-tab-content">
+          <div class="checklist-progress">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="font-weight: 600; color: #172b4d;">Prep Progress</span>
+              <span id="checklistProgress" style="color: #5e6c84;">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+          <div id="checklistContent">Loading checklist...</div>
+        </div>
+
+        <!-- Salary Tab -->
+        <div id="tab-salary" class="modal-tab-content">
+          <div id="salaryContent">No salary data available</div>
+        </div>
+
+        <!-- Feedback Tab -->
+        <div id="tab-feedback" class="modal-tab-content">
+          <div id="feedbackContent">
+            <div class="form-group">
+              <label for="difficultyRating">Interview Difficulty (1-5)</label>
+              <input type="number" id="difficultyRating" min="1" max="5">
+            </div>
+            <div class="form-group">
+              <label for="energyLevel">Your Energy Level (1-5)</label>
+              <input type="number" id="energyLevel" min="1" max="5">
+            </div>
+            <div class="form-group">
+              <label for="feedbackOutcome">Interview Outcome</label>
+              <select id="feedbackOutcome">
+                <option value="">Select outcome...</option>
+                <option value="rejected">Rejected</option>
+                <option value="no_response">No Response</option>
+                <option value="moving_forward">Moving Forward</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="feedbackNotes">Interview Notes</label>
+              <textarea id="feedbackNotes" rows="3" placeholder="What went well? What could improve?"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="saveFeedback()" style="width: 100%;">Save Feedback</button>
+          </div>
+        </div>
       </div>
-      <div class="modal-body" id="researchContent"></div>
     </div>
   </div>
 
@@ -495,7 +649,184 @@
       }
       
       document.getElementById('editNotes').value = company.notes || '';
+      
+      // Reset to details tab
+      document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.modal-tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.modal-tab')[0].classList.add('active');
+      document.getElementById('tab-details').classList.add('active');
+      
+      // Load additional data
+      loadChecklistData(id);
+      loadSalaryData(id);
+      loadResearchData(id);
+      loadFeedbackData(id);
+      
       document.getElementById('editModal').classList.add('show');
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.modal-tab-content').forEach(t => t.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    async function loadChecklistData(companyId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/pipeline/${companyId}/checklist`);
+        const data = await response.json();
+        const checklist = data.checklist || [];
+        
+        let html = '';
+        if (checklist.length === 0) {
+          html = '<p style="color: #5e6c84;">No prep items yet. Trigger research to auto-generate checklist.</p>';
+        } else {
+          const completed = checklist.filter(item => item.completed).length;
+          const progress = Math.round((completed / checklist.length) * 100);
+          
+          document.getElementById('progressFill').style.width = progress + '%';
+          document.getElementById('checklistProgress').textContent = `${progress}%`;
+          
+          html = checklist.map(item => `
+            <div class="checklist-item ${item.completed ? 'completed' : ''}">
+              <input type="checkbox" ${item.completed ? 'checked' : ''} 
+                     onchange="toggleChecklistItem(${item.id}, this.checked)">
+              <label>${item.item}</label>
+            </div>
+          `).join('');
+        }
+        
+        document.getElementById('checklistContent').innerHTML = html;
+      } catch (error) {
+        console.error('Error loading checklist:', error);
+        document.getElementById('checklistContent').innerHTML = '<p>Error loading checklist</p>';
+      }
+    }
+
+    async function toggleChecklistItem(itemId, completed) {
+      try {
+        await fetch(`${API_BASE_URL}/api/pipeline/checklist/${itemId}/toggle`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed })
+        });
+        
+        if (editingCompany) {
+          loadChecklistData(editingCompany.id);
+        }
+      } catch (error) {
+        alert('Error updating checklist: ' + error.message);
+      }
+    }
+
+    async function loadSalaryData(companyId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/pipeline/${companyId}/salary`);
+        const data = await response.json();
+        const salaries = data.salary || [];
+        
+        let html = '';
+        if (salaries.length === 0) {
+          html = '<p style="color: #5e6c84;">No salary data available yet.</p>';
+        } else {
+          const latest = salaries[0];
+          html = `
+            <div class="salary-box">
+              <div class="salary-label">Base Salary</div>
+              <div class="salary-value">$${(latest.base_min || 0).toLocaleString()} - $${(latest.base_max || 0).toLocaleString()}</div>
+            </div>
+            ${latest.bonus_min ? `
+            <div class="salary-box">
+              <div class="salary-label">Bonus</div>
+              <div class="salary-value">$${(latest.bonus_min || 0).toLocaleString()} - $${(latest.bonus_max || 0).toLocaleString()}</div>
+            </div>
+            ` : ''}
+            ${latest.total_comp_min ? `
+            <div class="salary-box">
+              <div class="salary-label">Total Compensation</div>
+              <div class="salary-value">$${(latest.total_comp_min || 0).toLocaleString()} - $${(latest.total_comp_max || 0).toLocaleString()}</div>
+            </div>
+            ` : ''}
+          `;
+        }
+        
+        document.getElementById('salaryContent').innerHTML = html;
+      } catch (error) {
+        console.error('Error loading salary data:', error);
+      }
+    }
+
+    async function loadResearchData(companyId) {
+      try {
+        const company = companies.find(c => c.id === companyId);
+        if (!company || !company.researchData) {
+          document.getElementById('researchTabContent').innerHTML = '<p style="color: #5e6c84;">No research available. Click research button to generate.</p>';
+          return;
+        }
+
+        const data = company.researchData;
+        let html = '';
+        
+        if (data.overview) {
+          html += `<div class="research-section"><h3>📋 Overview</h3><p>${data.overview}</p></div>`;
+        }
+        
+        if (data.techStack?.length) {
+          html += `<div class="research-section"><h3>🛠 Tech Stack</h3>${data.techStack.map(t => `<span class="tech-tag">${t}</span>`).join('')}</div>`;
+        }
+        
+        if (data.interviewQuestions?.length) {
+          html += `<div class="research-section"><h3>❓ Interview Questions</h3><ul>${data.interviewQuestions.map(q => `<li>${q}</li>`).join('')}</ul></div>`;
+        }
+        
+        if (data.preparationTips?.length) {
+          html += `<div class="research-section"><h3>✅ Prep Tips</h3><ul>${data.preparationTips.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+        }
+
+        document.getElementById('researchTabContent').innerHTML = html;
+      } catch (error) {
+        console.error('Error loading research:', error);
+      }
+    }
+
+    async function loadFeedbackData(companyId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/pipeline/${companyId}/feedback`);
+        const data = await response.json();
+        const feedbacks = data.feedback || [];
+        
+        if (feedbacks.length > 0) {
+          const latest = feedbacks[0];
+          document.getElementById('difficultyRating').value = latest.difficulty_rating || '';
+          document.getElementById('energyLevel').value = latest.energy_level || '';
+          document.getElementById('feedbackOutcome').value = latest.outcome || '';
+          document.getElementById('feedbackNotes').value = latest.notes || '';
+        }
+      } catch (error) {
+        console.error('Error loading feedback:', error);
+      }
+    }
+
+    async function saveFeedback() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/pipeline/${editingCompany.id}/feedback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            difficulty_rating: document.getElementById('difficultyRating').value,
+            energy_level: document.getElementById('energyLevel').value,
+            outcome: document.getElementById('feedbackOutcome').value,
+            notes: document.getElementById('feedbackNotes').value
+          })
+        });
+
+        if (!response.ok) throw new Error('Failed to save');
+        alert('Feedback saved!');
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
     }
 
     function closeEditModal() {

@@ -898,6 +898,131 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
+// ANALYTICS & INSIGHTS (Feature #1)
+// ============================================
+
+app.get('/api/analytics/pipeline', async (req, res) => {
+  try {
+    const analytics = await db.getPipelineAnalytics();
+    const upcomingInterviews = await db.getUpcomingInterviews(14);
+    
+    // Calculate conversion rates
+    const stageMap = {};
+    let totalCompanies = 0;
+    for (const stage of analytics) {
+      stageMap[stage.stage] = stage.count;
+      totalCompanies += stage.count;
+    }
+    
+    res.json({
+      success: true,
+      stages: analytics,
+      upcomingInterviews,
+      summary: {
+        totalCompanies,
+        screening: stageMap['screening'] || 0,
+        technical: stageMap['technical'] || 0,
+        final: stageMap['final'] || 0,
+        offers: stageMap['offer'] || 0,
+        conversionScreeningToTechnical: stageMap['technical'] && stageMap['screening'] 
+          ? Math.round((stageMap['technical'] / stageMap['screening']) * 100)
+          : 0,
+        conversionTechnicalToFinal: stageMap['final'] && stageMap['technical']
+          ? Math.round((stageMap['final'] / stageMap['technical']) * 100)
+          : 0
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// PREP CHECKLIST (Feature #4)
+// ============================================
+
+app.get('/api/pipeline/:id/checklist', async (req, res) => {
+  try {
+    const checklist = await db.getPrepChecklist(req.params.id);
+    res.json({ success: true, checklist });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/pipeline/:id/checklist', async (req, res) => {
+  try {
+    const { items } = req.body;
+    const addedItems = [];
+    
+    for (const item of items) {
+      const result = await db.addPrepChecklistItem(req.params.id, item);
+      addedItems.push(result);
+    }
+    
+    res.json({ success: true, items: addedItems });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/pipeline/checklist/:itemId/toggle', async (req, res) => {
+  try {
+    const { completed } = req.body;
+    const updated = await db.toggleChecklistItem(req.params.itemId, completed);
+    res.json({ success: true, item: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// SALARY DATA (Feature #5)
+// ============================================
+
+app.get('/api/pipeline/:id/salary', async (req, res) => {
+  try {
+    const salary = await db.getSalaryData(req.params.id);
+    res.json({ success: true, salary });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/pipeline/:id/salary', async (req, res) => {
+  try {
+    const salaryData = req.body;
+    const result = await db.addSalaryData(req.params.id, salaryData);
+    res.json({ success: true, salary: result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// INTERVIEW FEEDBACK (Feature #8)
+// ============================================
+
+app.get('/api/pipeline/:id/feedback', async (req, res) => {
+  try {
+    const feedback = await db.getInterviewFeedback(req.params.id);
+    res.json({ success: true, feedback });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/pipeline/:id/feedback', async (req, res) => {
+  try {
+    const feedback = req.body;
+    const result = await db.addInterviewFeedback(req.params.id, feedback);
+    res.json({ success: true, feedback: result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
