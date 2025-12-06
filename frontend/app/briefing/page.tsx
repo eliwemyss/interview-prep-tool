@@ -1,10 +1,11 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 import BriefingContent from '@/components/BriefingContent';
 
-export default function BriefingPage() {
+function BriefingPageContent() {
   const searchParams = useSearchParams();
   const { researchResults } = useAppStore();
   const company = searchParams.get('company');
@@ -52,5 +53,13 @@ export default function BriefingPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BriefingPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <BriefingPageContent />
+    </Suspense>
   );
 }

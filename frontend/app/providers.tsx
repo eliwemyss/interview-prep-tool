@@ -12,8 +12,7 @@ export function PHProvider({ children }: { children: React.ReactNode }) {
     if (posthogKey) {
       posthog.init(posthogKey, {
         api_host: posthogHost,
-        capture_pageviews: true,
-        capture_pageleaves: true,
+        capture_pageview: true,
         session_recording: {
           maskAllInputs: true,
           maskTextSelector: '[data-ph-mask]',
