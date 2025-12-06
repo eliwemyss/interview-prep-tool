@@ -1328,35 +1328,50 @@ app.listen(PORT, async () => {
     console.log(`✅ Database connected`);
 
     // Auto-run migrations on startup
+    console.log('🔄 Starting migration check...');
     try {
       const fs = require('fs');
       const path = require('path');
 
-      console.log('🔄 Checking for pending migrations...');
-
       const migrationsDir = path.join(__dirname, 'migrations');
-      const migrationFiles = fs.readdirSync(migrationsDir)
-        .filter(file => file.endsWith('.sql'))
-        .sort();
+      console.log(`📁 Migrations directory: ${migrationsDir}`);
 
-      for (const file of migrationFiles) {
-        try {
-          const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-          await db.query(sql);
-          console.log(`  ✅ ${file}`);
-        } catch (migError) {
-          // Migration might already be applied - that's OK
-          if (migError.code === '42701' || migError.code === '42P07') {
-            console.log(`  ⏭️  ${file} (already applied)`);
-          } else {
-            console.log(`  ⚠️  ${file}: ${migError.message}`);
+      // Check if directory exists
+      if (!fs.existsSync(migrationsDir)) {
+        console.error(`❌ Migrations directory does not exist: ${migrationsDir}`);
+      } else {
+        console.log(`✅ Migrations directory exists`);
+
+        const migrationFiles = fs.readdirSync(migrationsDir)
+          .filter(file => file.endsWith('.sql'))
+          .sort();
+
+        console.log(`📋 Found ${migrationFiles.length} migration files:`, migrationFiles);
+
+        for (const file of migrationFiles) {
+          console.log(`\n🔄 Running migration: ${file}`);
+          try {
+            const filePath = path.join(migrationsDir, file);
+            const sql = fs.readFileSync(filePath, 'utf8');
+            console.log(`  📄 Read ${sql.length} characters from ${file}`);
+
+            await db.query(sql);
+            console.log(`  ✅ ${file} - SUCCESS`);
+          } catch (migError) {
+            // Migration might already be applied - that's OK
+            if (migError.code === '42701' || migError.code === '42P07' || migError.code === '42P16') {
+              console.log(`  ⏭️  ${file} - ALREADY APPLIED (${migError.code})`);
+            } else {
+              console.log(`  ⚠️  ${file} - ERROR: ${migError.code} - ${migError.message}`);
+            }
           }
         }
-      }
 
-      console.log('✅ Migrations complete');
+        console.log('\n✅ Migrations complete');
+      }
     } catch (error) {
-      console.error('⚠️  Migration check failed:', error.message);
+      console.error('❌ Migration check failed with error:', error);
+      console.error('Stack:', error.stack);
     }
   } else {
     console.log(`❌ Database connection failed: ${dbHealth.error}`);
