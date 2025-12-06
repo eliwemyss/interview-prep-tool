@@ -725,7 +725,7 @@ app.post('/api/calendar/sync', async (req, res) => {
       // Check if company already has research
       let existingCompany = await db.getCompany(companyName);
       
-      const jobTitle = event.jobTitle || 'Software Engineer';
+      const jobTitle = event.jobTitle || null;
 
       // If company doesn't exist, create it
       if (!existingCompany) {
