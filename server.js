@@ -60,15 +60,53 @@ app.get('/health', async (req, res) => {
 app.post('/api/setup-db', async (req, res) => {
   try {
     await db.initializeTables();
-    res.json({ 
-      success: true, 
-      message: 'Database tables initialized successfully' 
+    res.json({
+      success: true,
+      message: 'Database tables initialized successfully'
     });
   } catch (error) {
     console.error('Database setup error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to initialize database',
-      details: error.message 
+      details: error.message
+    });
+  }
+});
+
+app.post('/api/run-migrations', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    console.log('🔄 Running database migrations...');
+
+    const migrationsDir = path.join(__dirname, 'migrations');
+    const migrationFiles = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort();
+
+    const results = [];
+
+    for (const file of migrationFiles) {
+      console.log(`📄 Running ${file}...`);
+      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+      await db.query(sql);
+      results.push(`✅ ${file} completed`);
+      console.log(`✅ ${file} completed`);
+    }
+
+    console.log('✅ All migrations completed successfully');
+
+    res.json({
+      success: true,
+      message: 'All migrations completed successfully',
+      migrations: results
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({
+      error: 'Migration failed',
+      details: error.message
     });
   }
 });
