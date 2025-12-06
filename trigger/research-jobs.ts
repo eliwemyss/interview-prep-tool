@@ -227,9 +227,9 @@ Please generate a JSON response with the following structure:
     "Question 5 technical"
   ],
   "preparationTips": [
-    "Tip 1 specific to this company",
-    "Tip 2",
-    "Tip 3"
+    "Specific preparation step 1: e.g. 'Review their open-source library X which handles Y'",
+    "Specific preparation step 2: e.g. 'Understand their product architecture because it affects design questions'",
+    "Specific preparation step 3: e.g. 'Study how they handle problem X in their domain'"
   ],
   "keyTopics": ["topic1", "topic2", "topic3"],
   "companyValues": ["value1", "value2"],
@@ -243,16 +243,21 @@ Please generate a JSON response with the following structure:
 }
 
 INSTRUCTIONS:
-1. Be specific to ${companyName} - use the actual data provided
-2. Return ONLY valid JSON, no markdown, no extra text
-3. If data is limited, make educated assumptions
-4. Include ALL fields from the schema
-5. Generate exactly 5 interview questions minimum
-6. Generate exactly 3-5 preparation tips
-7. Generate 3-5 smart questions to ask
-8. Generate 3-5 red flags to watch
+1. CRITICAL: Provide specific research, NOT generic advice. No "Research X" tips.
+2. Be specific to ${companyName} - use the actual data provided
+3. Products should describe what they actually do
+4. Tech stack should be actual tech they use, not generic list
+5. Questions should reference their specific products/challenges
+6. Preparation tips should be actionable: "Review X library" not "Research them"
+7. Return ONLY valid JSON, no markdown, no extra text
+8. If data is limited, use your knowledge about ${companyName}
+9. Generate exactly 5 interview questions
+10. Generate 3-5 specific, actionable preparation tips (DO NOT say "Research X")
+11. Generate 3-5 smart questions to ask them about their domain
+12. EXAMPLE BAD TIP: "Familiarize yourself with their tools" - DO NOT DO THIS
+13. EXAMPLE GOOD TIP: "Review their open-source library X on GitHub to understand their architecture approach"
 
-Generate the interview prep report now:`;
+Generate the research now:`;
 
     try {
       const message = await anthropic.messages.create({
