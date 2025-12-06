@@ -13,30 +13,27 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-slate-950 text-slate-50">
-        <nav className="bg-gradient-to-r from-sky-800 via-cyan-700 to-emerald-600 text-white shadow-lg">
+      <body className="bg-[#15171a] text-white">
+        <nav className="bg-[#1c1e21] border-b border-[rgba(255,255,255,0.1)] sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
               <div className="flex items-center space-x-8">
-                <a href="/" className="font-bold text-xl">
-                  🎯 Interview Ops
+                <a href="/" className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-gradient-to-r from-[#FF9B42] to-[#F9BD2B] rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">I</span>
+                  </div>
+                  <span className="font-bold text-xl text-white">Interview Ops</span>
                 </a>
-                <div className="hidden md:flex space-x-4">
+                <div className="hidden md:flex space-x-1">
                   <a
                     href="/"
-                    className="hover:bg-white hover:bg-opacity-10 px-3 py-2 rounded-md text-sm font-medium transition"
+                    className="text-white bg-[#25272a] px-4 py-2 rounded-lg text-sm font-medium"
                   >
                     Dashboard
                   </a>
                   <a
-                    href="/dashboard"
-                    className="hover:bg-white hover:bg-opacity-10 px-3 py-2 rounded-md text-sm font-medium transition"
-                  >
-                    Legacy Dashboard
-                  </a>
-                  <a
                     href="/briefing"
-                    className="hover:bg-white hover:bg-opacity-10 px-3 py-2 rounded-md text-sm font-medium transition"
+                    className="text-[#9ca3af] hover:text-white hover:bg-[#25272a] px-4 py-2 rounded-lg text-sm font-medium transition"
                   >
                     Briefing
                   </a>
