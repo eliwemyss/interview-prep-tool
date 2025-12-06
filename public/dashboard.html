@@ -336,8 +336,6 @@
           <div class="form-group">
             <label for="editStage">Stage</label>
             <select id="editStage">
-              <option value="research">Research</option>
-              <option value="applied">Applied</option>
               <option value="screening">Screening</option>
               <option value="technical">Technical</option>
               <option value="final">Final</option>
@@ -382,12 +380,11 @@
     let draggedCard = null;
 
     const STAGES = [
-      { id: 'research', name: 'Research', color: '#c377e0' },
-      { id: 'applied', name: 'Applied', color: '#0079bf' },
       { id: 'screening', name: 'Screening', color: '#61bd4f' },
       { id: 'technical', name: 'Technical', color: '#ff9f1a' },
       { id: 'final', name: 'Final', color: '#eb5a46' },
-      { id: 'offer', name: 'Offer', color: '#00c2e0' }
+      { id: 'offer', name: 'Offer', color: '#00c2e0' },
+      { id: 'rejected', name: 'Rejected', color: '#b3bac5' }
     ];
 
     async function loadPipeline() {
@@ -486,7 +483,7 @@
       editingCompany = company;
       document.getElementById('editModalTitle').textContent = company.name;
       document.getElementById('editCompanyName').value = company.name;
-      document.getElementById('editStage').value = company.stage || 'research';
+      document.getElementById('editStage').value = company.stage || 'screening';
       
       if (company.nextInterview) {
         document.getElementById('editNextInterview').value = new Date(company.nextInterview).toISOString().slice(0, 16);

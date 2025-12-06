@@ -9,7 +9,7 @@ const { performResearch } = require('./lib/research');
 const { performDeepResearch } = require('./lib/deep-research');
 const { performEnhancedResearch } = require('./lib/enhanced-research');
 const { generateInterviewBriefing } = require('./lib/interview-briefing');
-const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName } = require('./lib/google-calendar');
+const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName, normalizeCompanyName } = require('./lib/google-calendar');
 const { sendPrepEmail } = require('./lib/email');
 const { triggerClient } = require('./lib/trigger-client');
 
@@ -702,12 +702,15 @@ app.post('/api/calendar/sync', async (req, res) => {
     
     // Process each event
     for (const event of events) {
-      const companyName = event.companyName; // Already extracted by getInterviewEvents
+      let companyName = event.companyName; // Already extracted by getInterviewEvents
       
       if (!companyName) {
         syncResults.skipped++;
         continue;
       }
+      
+      // Normalize company name to prevent duplicates (e.g., "Group" -> "PostHog")
+      companyName = normalizeCompanyName(companyName);
       
       // Create dedup key: company name + date (without time)
       const eventDate = new Date(event.startTime).toISOString().split('T')[0];
@@ -724,7 +727,7 @@ app.post('/api/calendar/sync', async (req, res) => {
       
       // If company doesn't exist, create it
       if (!existingCompany) {
-        await db.addCompanyToPipeline(companyName, 'research', event.startTime, `Auto-added from calendar: ${event.summary}`);
+        await db.addCompanyToPipeline(companyName, 'screening', event.startTime, `Auto-added from calendar: ${event.summary}`);
         existingCompany = await db.getCompany(companyName);
       }
       
