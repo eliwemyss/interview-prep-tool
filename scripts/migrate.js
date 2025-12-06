@@ -8,17 +8,25 @@ async function migrate() {
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   });
-  
+
   try {
     console.log('🔄 Starting database migration...');
-    
-    const sql = fs.readFileSync(
-      path.join(__dirname, '../migrations/001_initial_schema.sql'),
-      'utf8'
-    );
-    
-    await pool.query(sql);
-    console.log('✅ Migration completed successfully');
+
+    const migrationsDir = path.join(__dirname, '../migrations');
+    const migrationFiles = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort();
+
+    console.log(`Found ${migrationFiles.length} migration files:`, migrationFiles);
+
+    for (const file of migrationFiles) {
+      console.log(`\n📄 Running ${file}...`);
+      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+      await pool.query(sql);
+      console.log(`✅ ${file} completed`);
+    }
+
+    console.log('\n✅ All migrations completed successfully');
     console.log('📊 Database schema is ready');
   } catch (error) {
     console.error('❌ Migration failed:', error.message);
