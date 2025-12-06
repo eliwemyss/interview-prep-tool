@@ -10,10 +10,13 @@ export const calendarSyncSchedule = schedules.task({
   // Run every 6 hours at :00 minutes
   cron: "0 */6 * * *",
   run: async (payload) => {
-    const API_URL = process.env.API_URL || "http://localhost:3000";
-    
-    console.log("[Calendar Sync] Starting scheduled sync...");
-    
+    const API_URL = process.env.API_URL || process.env.RAILWAY_PUBLIC_DOMAIN
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : "https://interviews.himynameiseli.com";
+
+    console.log(`[Calendar Sync] Starting scheduled sync at ${new Date().toISOString()}`);
+    console.log(`[Calendar Sync] API URL: ${API_URL}`);
+
     try {
       const response = await axios.post(`${API_URL}/api/calendar/sync`, {}, {
         timeout: 120000, // 2 minute timeout
