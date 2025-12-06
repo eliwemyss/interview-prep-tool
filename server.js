@@ -725,17 +725,25 @@ app.post('/api/calendar/sync', async (req, res) => {
       // Check if company already has research
       let existingCompany = await db.getCompany(companyName);
       
+      const jobTitle = event.jobTitle || 'Software Engineer';
+
       // If company doesn't exist, create it
       if (!existingCompany) {
-        const jobTitle = event.jobTitle || 'Software Engineer';
         await db.addCompanyToPipeline(companyName, 'screening', event.startTime, `Auto-added from calendar: ${event.summary}`);
         existingCompany = await db.getCompany(companyName);
-        if (existingCompany && jobTitle) {
-          // Update the company's notes with job title for research context
+      }
+
+      // If we have a job title, refresh notes when they are empty or auto-generated
+      if (existingCompany && jobTitle) {
+        const notes = existingCompany.notes || '';
+        const looksAuto = notes.startsWith('Auto-added from calendar') || notes.startsWith('Job Title:');
+        if (!notes || looksAuto) {
           await db.query(
             `UPDATE companies SET notes = $1 WHERE id = $2`,
             [`Job Title: ${jobTitle}`, existingCompany.id]
           );
+          // Refresh the in-memory object so downstream logic sees the update
+          existingCompany = await db.getCompany(companyName);
         }
       }
       
