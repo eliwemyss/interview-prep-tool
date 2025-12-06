@@ -196,6 +196,50 @@ app.get('/api/admin/companies', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/run-migrations
+ * Manually trigger database migrations
+ */
+app.post('/api/admin/run-migrations', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const results = [];
+    const migrationsDir = path.join(__dirname, 'migrations');
+
+    if (!fs.existsSync(migrationsDir)) {
+      return res.status(500).json({
+        success: false,
+        error: 'Migrations directory not found'
+      });
+    }
+
+    const migrationFiles = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort();
+
+    for (const file of migrationFiles) {
+      try {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await db.query(sql);
+        results.push({ file, status: 'success' });
+      } catch (migError) {
+        if (migError.code === '42701' || migError.code === '42P07' || migError.code === '42P16') {
+          results.push({ file, status: 'already_applied' });
+        } else {
+          results.push({ file, status: 'error', error: migError.message });
+        }
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============================================
 // RESEARCH ENDPOINTS
 // ============================================
