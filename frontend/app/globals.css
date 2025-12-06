@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* PostHog-inspired Color System */
+  /* PostHog Color System */
   --color-bg-primary: #15171a;
   --color-bg-secondary: #1c1e21;
   --color-bg-tertiary: #25272a;
@@ -19,6 +19,13 @@
 
   /* Font Family */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Spacing */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
 }
 
 * {
