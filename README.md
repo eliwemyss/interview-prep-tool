@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Interview Prep Tool - Frontend (Next.js)
+
+Modern React/Next.js frontend for the Interview Prep Tool. This app now includes the kanban pipeline, research modal with prep/salary/feedback tabs, and analytics header.
+
+## Features
+
+✨ **Modern Tech Stack**
+- Next.js (App Router)
+- TypeScript for type safety
+- Tailwind CSS for styling
+- Zustand for lightweight state management
+- Axios for API communication
+
+📋 **Core Features**
+- **Pipeline Board**: Kanban across research → offer with quick stage changes
+- **Research Modal**: Research, prep checklist, salary intel, and interview feedback tabs
+- **Analytics Header**: Stage counts + conversion stats + upcoming interviews
+- **Checklist Sync**: Auto-generated prep checklists from the Trigger.dev research job
+- **Salary + Feedback**: Persisted salary entries and interview feedback per company
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 18+
+- Backend API running at `http://localhost:3000` (dev) or `https://interviews.himynameiseli.com` (prod)
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+echo "NEXT_PUBLIC_API_URL=http://localhost:3000" > .env.local
+npm run dev:local   # or npm run dev:prod to point at prod API
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+frontend/
+├── app/
+│   ├── layout.tsx       # Root layout
+│   ├── page.tsx         # Main dashboard (kanban + modal)
+│   ├── dashboard/page.tsx # Alias to main dashboard
+│   └── briefing/page.tsx # Legacy briefing view
+├── components/          # Board, analytics header, research modal, legacy parts
+├── lib/
+│   ├── api.ts          # Axios API client
+│   ├── store.ts        # Zustand store
+│   └── types.ts        # Shared types
+```
 
-## Learn More
+## Pages
 
-To learn more about Next.js, take a look at the following resources:
+- **Dashboard** (`/` and `/dashboard`) - Kanban pipeline, analytics, research modal
+- **Briefing** (`/briefing?company=Name`) - Pre-interview briefing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Integration
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Communicates with backend at configurable `NEXT_PUBLIC_API_URL`
 
-## Deploy on Vercel
+## Development
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run dev           # Start dev server with existing .env.local
+npm run dev:local     # Force local API target
+npm run dev:prod      # Force prod API target
+npm run build         # Build for production
+npm start             # Run production server
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+### Vercel
+
+```bash
+npm i -g vercel
+vercel
+vercel env add NEXT_PUBLIC_API_URL https://interviews.himynameiseli.com
+```
+
+## Troubleshooting
+
+- **API fails**: Check backend is running and NEXT_PUBLIC_API_URL is correct
+- **Build errors**: Run `rm -rf .next node_modules && npm install`
+- **Port 3000 in use**: `lsof -i :3000 | grep LISTEN | awk '{print $2}' | xargs kill -9`
