@@ -93,4 +93,9 @@ export const healthAPI = {
   check: () => api.get('/health'),
 };
 
+// Gmail endpoints
+export const gmailAPI = {
+  sync: () => api.post('/api/gmail/sync'),
+};
+
 export default api;

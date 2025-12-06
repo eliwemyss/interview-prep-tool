@@ -816,6 +816,94 @@ app.post('/api/calendar/sync', async (req, res) => {
 });
 
 // ============================================
+// GMAIL INTERVIEW EMAIL INGESTION (READ-ONLY)
+// ============================================
+
+app.post('/api/gmail/sync', async (req, res) => {
+  try {
+    const googleGmail = require('./lib/google-gmail');
+
+    const messages = await googleGmail.getInterviewEmails(60, 40);
+
+    const results = {
+      processed: messages.length,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      companies: [],
+    };
+
+    for (const email of messages) {
+      const lead = googleGmail.parseEmailToLead(email, normalizeCompanyName);
+      if (!lead || !lead.companyName) {
+        results.skipped++;
+        continue;
+      }
+
+      let existingCompany = await db.getCompany(lead.companyName);
+
+      // Create if missing
+      if (!existingCompany) {
+        const note = lead.jobTitle
+          ? `Job Title: ${lead.jobTitle}`
+          : lead.subject
+          ? `From email: ${lead.subject.substring(0, 180)}`
+          : null;
+        await db.addCompanyToPipeline(lead.companyName, 'screening', null, note);
+        existingCompany = await db.getCompany(lead.companyName);
+        results.created++;
+      }
+
+      // Update notes if we have a better job title and current notes look auto
+      if (existingCompany && lead.jobTitle) {
+        const notes = existingCompany.notes || '';
+        const looksAuto = notes.startsWith('Auto-added from calendar') || notes.startsWith('Job Title:') || notes.startsWith('From email:');
+        if (!notes || looksAuto || googleGmail.isLikelyTitle(notes) === false) {
+          await db.query(
+            `UPDATE companies SET notes = $1 WHERE id = $2`,
+            [`Job Title: ${lead.jobTitle}`, existingCompany.id]
+          );
+          results.updated++;
+        }
+      }
+
+      // Auto-trigger research if missing
+      if (existingCompany && !existingCompany.research_data && triggerClient) {
+        const jobId = uuidv4();
+        try {
+          await triggerClient.queueResearchJob({
+            jobId,
+            companyName: lead.companyName,
+            companyUrl: null,
+            role: lead.jobTitle || 'Interview Role',
+            deepMode: true,
+          });
+          results.companies.push({ name: lead.companyName, status: 'research_queued', jobId });
+        } catch (err) {
+          console.warn(`Failed to queue research for ${lead.companyName}:`, err.message);
+          results.companies.push({ name: lead.companyName, status: 'research_failed', error: err.message });
+        }
+      } else {
+        results.companies.push({ name: lead.companyName, status: 'updated' });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Processed ${results.processed} emails: created ${results.created}, updated ${results.updated}, skipped ${results.skipped}`,
+      ...results,
+    });
+  } catch (error) {
+    console.error('Gmail sync error:', error);
+    res.status(500).json({
+      error: 'Failed to sync Gmail',
+      message: error.message,
+      hint: 'Re-run Google connect to grant gmail.readonly scope if missing.',
+    });
+  }
+});
+
+// ============================================
 // INTERVIEW REMINDER EMAILS (24H BEFORE)
 // ============================================
 

@@ -6,7 +6,7 @@ import PipelineBoard from '@/components/PipelineBoard';
 import ResearchModal from '@/components/ResearchModal';
 import JobToast from '@/components/JobToast';
 import ErrorToast from '@/components/ErrorToast';
-import { analyticsAPI, calendarAPI, checklistAPI, feedbackAPI, pipelineAPI, salaryAPI } from '@/lib/api';
+import { analyticsAPI, calendarAPI, checklistAPI, feedbackAPI, gmailAPI, pipelineAPI, salaryAPI } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { Company, Stage } from '@/lib/types';
 
@@ -255,6 +255,24 @@ export default function DashboardPage() {
             className="rounded-md bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500"
           >
             Sync Calendar
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                setJobToast({ message: 'Syncing Gmail...', status: 'queued' });
+                await gmailAPI.sync();
+                const refreshed = await pipelineAPI.getAll();
+                setCompanies(refreshed.data.companies || []);
+                setJobToast({ message: 'Gmail synced', status: 'done' });
+                setTimeout(() => setJobToast(null), 1500);
+              } catch (err: any) {
+                setInlineError(err?.response?.data?.message || 'Gmail sync failed');
+                setJobToast(null);
+              }
+            }}
+            className="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+          >
+            Sync Gmail
           </button>
         </div>
       </div>
