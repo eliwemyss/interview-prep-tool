@@ -12,6 +12,16 @@ const { generateInterviewBriefing } = require('./lib/interview-briefing');
 const { connectGoogleCalendar, getUpcomingEvents, getInterviewEvents, extractCompanyName, extractJobTitle, normalizeCompanyName } = require('./lib/google-calendar');
 const { sendPrepEmail } = require('./lib/email');
 const { triggerClient } = require('./lib/trigger-client');
+const Anthropic = require('@anthropic-ai/sdk');
+
+// PostHog Analytics
+let posthog = null;
+if (process.env.POSTHOG_API_KEY) {
+  const { PostHog } = require('posthog-node');
+  posthog = new PostHog(process.env.POSTHOG_API_KEY, {
+    host: process.env.POSTHOG_HOST || 'https://app.posthog.com'
+  });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1113,6 +1123,151 @@ app.post('/api/pipeline/:id/feedback', async (req, res) => {
     const feedback = req.body;
     const result = await db.addInterviewFeedback(req.params.id, feedback);
     res.json({ success: true, feedback: result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// SALARY CALCULATOR ENDPOINTS
+// ============================================
+
+app.get('/api/salary/calculate', (req, res) => {
+  try {
+    const { role, yoe, location, companySize } = req.query;
+
+    const roleBaseRates = {
+      'Technical Support Engineer': 110000,
+      'Software Engineer': 140000,
+      'Senior Software Engineer': 170000,
+      'Product Support Engineer': 120000,
+      'Developer Advocate': 150000,
+      'Staff Engineer': 190000,
+      'Engineering Manager': 180000,
+    };
+
+    const experienceMultipliers = {
+      '0-2': 0.85, '2-4': 1.0, '4-6': 1.15,
+      '6-8': 1.30, '8-10': 1.45, '10+': 1.60
+    };
+
+    const locationMultipliers = {
+      'San Francisco': 1.0, 'New York': 1.05, 'Seattle': 0.95,
+      'Nashville': 0.85, 'Remote': 0.90, 'Austin': 0.88,
+      'Denver': 0.87, 'Boston': 0.98
+    };
+
+    const sizeMultipliers = {
+      'Startup (<50)': 0.9, 'Growth (50-500)': 1.0, 'Enterprise (500+)': 1.1
+    };
+
+    const getExpRange = (years) => {
+      if (years <= 2) return '0-2';
+      if (years <= 4) return '2-4';
+      if (years <= 6) return '4-6';
+      if (years <= 8) return '6-8';
+      if (years <= 10) return '8-10';
+      return '10+';
+    };
+
+    const baseRate = roleBaseRates[role] || 140000;
+    const expMult = experienceMultipliers[getExpRange(parseInt(yoe))];
+    const locMult = locationMultipliers[location];
+    const sizeMult = sizeMultipliers[companySize];
+
+    const targetBase = Math.round(baseRate * expMult * locMult * sizeMult);
+
+    const result = {
+      conservative: {
+        min: Math.round(targetBase * 0.85),
+        max: Math.round(targetBase * 0.95)
+      },
+      target: {
+        min: Math.round(targetBase * 1.0),
+        max: Math.round(targetBase * 1.15)
+      },
+      stretch: {
+        min: Math.round(targetBase * 1.15),
+        max: Math.round(targetBase * 1.35)
+      },
+      equity: {
+        min: Math.round(targetBase * 0.18),
+        max: Math.round(targetBase * 0.35)
+      },
+      totalComp: {
+        min: Math.round(targetBase * 1.18),
+        max: Math.round(targetBase * 1.5)
+      }
+    };
+
+    if (posthog) {
+      posthog.capture({ distinctId: 'server', event: 'salary_calculated', properties: { role, yoe, location } });
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/salary/save/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { targetMin, targetMax, calculatorInputs } = req.body;
+
+    await db.query(
+      `UPDATE companies
+       SET salary_target_min = $1,
+           salary_target_max = $2,
+           salary_research_data = $3
+       WHERE id = $4`,
+      [targetMin, targetMax, JSON.stringify(calculatorInputs), companyId]
+    );
+
+    if (posthog) {
+      posthog.capture({ distinctId: 'server', event: 'salary_target_saved', properties: { companyId, targetMin, targetMax } });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/salary/script/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { targetBase, userBackground, companyContext } = req.body;
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const prompt = `Generate a professional salary negotiation script for a job offer.
+
+User Background: ${userBackground}
+Target Base Salary: $${targetBase}
+Company Context: ${companyContext}
+
+Generate a 3-4 sentence negotiation script that:
+1. Highlights relevant experience and achievements
+2. References market data (Levels.fyi, industry standards)
+3. States the target salary range confidently
+4. Emphasizes value the candidate will bring
+
+Return ONLY the script text, no extra formatting.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const script = message.content[0].text;
+
+    if (posthog) {
+      posthog.capture({ distinctId: 'server', event: 'negotiation_script_generated', properties: { companyId, targetBase } });
+    }
+
+    res.json({ script });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
