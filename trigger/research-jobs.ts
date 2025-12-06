@@ -421,6 +421,79 @@ export const storeResearchTask = task({
 });
 
 /**
+ * Task 5: Generate prep checklist from research
+ * Creates actionable checklist items from Claude's prepChecklist array
+ */
+export const generatePrepChecklistTask = task({
+  id: "generate-prep-checklist",
+  retry: {
+    maxAttempts: 3,
+    minTimeoutInMs: 1000,
+    maxTimeoutInMs: 5000,
+  },
+  run: async (payload: {
+    companyId: number;
+    analysis: any;
+  }) => {
+    console.log(`[generatePrepChecklistTask] Creating checklist for company ${payload.companyId}`);
+
+    try {
+      const client = await pool.connect();
+
+      try {
+        await client.query("BEGIN");
+
+        // Get the prepChecklist array from analysis
+        const prepChecklist = payload.analysis.prepChecklist || [];
+
+        if (prepChecklist.length === 0) {
+          console.log(`⚠️ No prep checklist items found in analysis for company ${payload.companyId}`);
+          await client.query("COMMIT");
+          return { success: true, itemsCreated: 0 };
+        }
+
+        // Clear existing checklist items for this company (to avoid duplicates)
+        await client.query(
+          `DELETE FROM prep_checklist WHERE company_id = $1`,
+          [payload.companyId]
+        );
+
+        // Insert new checklist items
+        const insertQuery = `
+          INSERT INTO prep_checklist (company_id, item, completed)
+          VALUES ($1, $2, false)
+        `;
+
+        let itemsCreated = 0;
+        for (const item of prepChecklist) {
+          if (item && typeof item === 'string' && item.trim().length > 0) {
+            await client.query(insertQuery, [payload.companyId, item.trim()]);
+            itemsCreated++;
+          }
+        }
+
+        await client.query("COMMIT");
+        console.log(`✅ Created ${itemsCreated} prep checklist items for company ${payload.companyId}`);
+
+        return {
+          success: true,
+          itemsCreated,
+          checklistItems: prepChecklist
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error: any) {
+      console.error(`Error generating prep checklist:`, error.message);
+      throw new Error(`Failed to generate prep checklist: ${error.message}`);
+    }
+  },
+});
+
+/**
  * Main orchestration task: Company Research Job
  * Chains all subtasks together and handles failures
  */
@@ -479,6 +552,17 @@ export const companyResearchJob = task({
         githubData,
       });
 
+      console.log(`✅ Step 3 complete`);
+
+      // Step 4: Generate prep checklist
+      console.log("📝 Step 4: Generating prep checklist...");
+      const checklistResult = await generatePrepChecklistTask.triggerAndWait({
+        companyId: storeResult.companyId,
+        analysis,
+      });
+
+      console.log(`✅ Step 4 complete`);
+
       console.log("=".repeat(60));
       console.log(`✅ [companyResearchJob] Complete!\n`);
 
@@ -490,6 +574,7 @@ export const companyResearchJob = task({
         completedAt: new Date().toISOString(),
         analysis,
         ...storeResult,
+        checklistResult,
       };
     } catch (error: any) {
       console.error(
